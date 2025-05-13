@@ -333,6 +333,112 @@ def profile_pat(message):
             patient[2], patient[4], patient[5]),
         reply_markup=marcup)
 
+def doc_list(message, call):
+    marcup = types.InlineKeyboardMarkup(row_width=3)
+    spec1 = types.InlineKeyboardButton(text="Терапевт", callback_data="therapist_doc")
+    spec2 = types.InlineKeyboardButton(text="Семейный врач", callback_data="family_doctor_doc")
+    spec3 = types.InlineKeyboardButton(text="Педиатр", callback_data="pediatrician_doc")
+    spec4 = types.InlineKeyboardButton(text="Кардиолог", callback_data="cardiologist_doc")
+    spec5 = types.InlineKeyboardButton(text="Гастроэнтеролог", callback_data="gastroenterologist_doc")
+    spec6 = types.InlineKeyboardButton(text="Эндокринолог", callback_data="endocrinologist_doc")
+    spec7 = types.InlineKeyboardButton(text="Невролог", callback_data="neurologist_doc")
+    spec8 = types.InlineKeyboardButton(text="Аллерголог-иммунолог", callback_data="allergist_immunologist_doc")
+    spec9 = types.InlineKeyboardButton(text="Дерматолог", callback_data="dermatologist_doc")
+    spec10 = types.InlineKeyboardButton(text="Психотерапевт", callback_data="psychotherapist_doc")
+    spec11 = types.InlineKeyboardButton(text="Гинеколог", callback_data="gynecologist_doc")
+    spec12 = types.InlineKeyboardButton(text="Офтальмолог", callback_data="ophthalmologist_doc")
+    spec13 = types.InlineKeyboardButton(text="Стоматолог", callback_data="dentist_doc")
+    spec14 = types.InlineKeyboardButton(text="Психиатр", callback_data="psychiatrist_doc")
+    marcup.add(spec1, spec2, spec3, spec4, spec5, spec6, spec7, spec8, spec9, spec10, spec11, spec12, spec13, spec14)
+    bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text="Выберите напровление:", reply_markup=marcup)
+
+def get_doc(message, call, filters, flag, msg, id):
+    doctor = []
+    conn, cursor = connect_db()
+    spec = cursor.execute('''SELECT spec FROM patients WHERE user_id = ?''', (call.from_user.id,)).fetchone()
+    print(spec)
+    cursor.execute('''SELECT user_id FROM specialisation WHERE name = ?''', (spec))
+    doctors_ids = cursor.fetchall()
+    
+    print(spec)
+    print(doctors_ids)
+    doctors_ids = [doctor[0] for doctor in doctors_ids]
+    print(doctors_ids)
+    cursor.execute('''SELECT filter FROM patients WHERE user_id = ?''', (id,))
+    filters = cursor.fetchone()
+    filters= int(filters[0])
+    print('filters', filters)
+    if doctors_ids:
+        for doctor_id in doctors_ids:
+            print(doctor_id)
+            cursor.execute('''SELECT * FROM doctors WHERE user_id = ? AND verification_status = ?''', (doctor_id, 'verified'))
+            doctor += cursor.fetchall()
+        print(doctor)
+        doctor = sorted(doctor, key=lambda x: x[filters], reverse=True)
+        print(doctor)
+        print(len(doctor))
+    if flag:
+        doc_card(message, call, doctor, msg)
+        flag = False
+    else:
+        doctors(message, call, doctor)
+
+def doctors(message, call, doctor):
+    conn, cursor = connect_db()
+    if len(doctor) == 0:
+        bot.send_message(message.chat.id, "Врачи не найдены.")
+    else:
+        marcup = types.InlineKeyboardMarkup(row_width=3)
+        sort1 = types.InlineKeyboardButton(text="По рейтингу", callback_data="sort1")
+        sort2 = types.InlineKeyboardButton(text="По цене", callback_data="sort2")
+        sort3 = types.InlineKeyboardButton(text="По опыту", callback_data="sort3")
+        back = types.InlineKeyboardButton(text="Назад", callback_data="doc_reg")
+        marcup.add(sort1, sort2, sort3, back)
+        #создаем текст для отправки
+        text = "Врачи:\n"
+        t = 1
+        for doc in doctor:
+            text += f"{t}. Имя: {doc[2]}\nСтаж: {doc[11]}\nРейтинг: {doc[10]}\n\n"
+            t += 1
+        bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text=text, reply_markup=marcup)
+            
+@bot.message_handler(content_types=['text'])
+def handle_text(message):
+    msg = message.text
+    flag= True
+    conn, cursor = connect_db()
+    cursor.execute('''SELECT filter FROM patients WHERE user_id = ?''', (message.from_user.id,))
+    filters = cursor.fetchone()
+    get_doc(message, message, filters=filters, flag=flag, msg=msg, id=message.from_user.id)
+
+def doc_card(message, call, doctor, msg):
+    msg = int(msg) - 1
+    print(doctor[msg])
+    doctors = doctor[msg][3]
+    print('doc', doctors)  
+    conn, cursor = connect_db()
+    cursor.execute('''SELECT * FROM specialisation WHERE user_id = ?''', (doctor[msg][1],))
+    specialization = cursor.fetchall()
+    print('spec', specialization)
+    specialization_coun = int(len(specialization))
+    print('spec1', specialization_coun)
+    if doctors != 'None':
+        print(doctor[msg][3])
+        with open(doctor[msg][3], 'rb') as photo:
+            bot.send_photo(message.chat.id, photo, caption=f"Имя: {doctor[msg][2]}\n"
+                                                           f"Специальность: {doctor[msg][7]}\n"
+                                                           f"Стаж: {doctor[msg][11]}\n"
+                                                           f"Рейтинг: {doctor[msg][10]}\n"
+                                                           f"Специальности: {specialization[0][3]}\n"
+                                                           f"Цена: {specialization[0][4]}\n")
+    else:
+        text=f"Имя: {doctor[msg][2]}\n"f"Специальность: {doctor[msg][7]}\n"f"Стаж: {doctor[msg][11]}\n"f"Рейтинг: {doctor[msg][10]}\n"
+        for specialization in specialization:
+            text += f"Специальность: {specialization[3]}\n"
+            text += f"Цена: {specialization[4]}\n\n"
+            
+        bot.send_message(message.chat.id, text=text, reply_markup=None)
+
 @bot.callback_query_handler(func=lambda call: True)
 def callback_query(call):
     print(call.from_user.id)
@@ -367,7 +473,43 @@ def callback_query(call):
         pass
     elif call.data == "edit_profile":
         edit_profile(message=call.message, call=call)
-
+    elif call.data == "doc_reg":
+        doc_list(message=call.message, call=call)
+    elif call.data in ["therapist_doc", "family_doctor_doc", "pediatrician_doc", "cardiologist_doc", "gastroenterologist_doc",
+                     "endocrinologist_doc", "neurologist_doc", "allergist_immunologist_doc", "dermatologist_doc",
+                     "psychotherapist_doc", "gynecologist_doc", "ophthalmologist_doc", "dentist_doc", "psychiatrist_doc"]:
+        spec = call.data.replace("_doc", "")
+        print(spec)
+        conn, cursor = connect_db()
+        cursor.execute('''SELECT spec FROM patients WHERE user_id = ?''', (call.from_user.id,))
+        specialization = cursor.fetchone() 
+        print('spec1',specialization)  
+        conn.commit()
+        cursor.execute('''UPDATE patients SET spec = ? WHERE user_id = ?''', (spec, call.from_user.id))
+        conn.commit()
+        filters = 10
+        cursor.execute('''UPDATE patients SET filter = ? WHERE user_id = ?''', (filters, call.from_user.id))
+        conn.commit()
+        get_doc(message=call.message, call=call, filters=filters, flag=False, msg=None, id=call.from_user.id)
+    elif call.data == "sort1":
+        filters = 10
+        conn, cursor = connect_db()
+        cursor.execute('''UPDATE patients SET filter = ? WHERE user_id = ?''', (filters, call.from_user.id))
+        conn.commit()
+        get_doc(message=call.message, call=call, filters=filters, flag=False, msg=None, id=call.from_user.id)
+    elif call.data == "sort2":
+        filters = 11
+        conn, cursor = connect_db()
+        cursor.execute('''UPDATE patients SET filter = ? WHERE user_id = ?''', (filters, call.from_user.id))
+        conn.commit()
+        get_doc(message=call.message, call=call, filters=filters, flag=False, msg=None, id=call.from_user.id)
+    elif call.data == "sort3":
+        filters = 11
+        conn, cursor = connect_db()
+        cursor.execute('''UPDATE patients SET filter = ? WHERE user_id = ?''', (filters, call.from_user.id))
+        conn.commit()
+        get_doc(message=call.message, call=call, filters=filters, flag=False, msg=None, id=call.from_user.id)
+        
 
 
 
