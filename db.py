@@ -33,6 +33,8 @@ c.execute('''CREATE TABLE patients (
     avatar TEXT,
     phone TEXT NOT NULL UNIQUE,
     email TEXT NOT NULL UNIQUE,
+    spec TEXT, -- Специальность
+    filter TEXT, -- Фильтр по специальности
     registration_date DATETIME DEFAULT CURRENT_TIMESTAMP
 )
 ''')
