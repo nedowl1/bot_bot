@@ -22,6 +22,7 @@ c.execute('''CREATE TABLE doctors (
     rating REAL DEFAULT 0.0, -- Средний рейтинг
     balance REAL DEFAULT 0.0, -- Для вывода денег
     experience INTEGER, -- Стаж работы (в годах)
+    active_chat_id INTEGER, -- ID активного чата
     registration_date DATETIME DEFAULT CURRENT_TIMESTAMP
 )''')
 print("Таблица doctors создана или уже существует.")
@@ -35,13 +36,16 @@ c.execute('''CREATE TABLE patients (
     email TEXT NOT NULL UNIQUE,
     spec TEXT, -- Специальность
     filter TEXT, -- Фильтр по специальности
+    active_chat_id INTEGER, -- ID активного чата
     registration_date DATETIME DEFAULT CURRENT_TIMESTAMP
+    
 )
 ''')
 print("Таблица patients создана или уже существует.")
 
 c.execute('''CREATE TABLE consultations (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    identifier TEXT NOT NULL UNIQUE, -- Уникальный идентификатор консультации
     patient_id INTEGER NOT NULL,
     doctor_id INTEGER NOT NULL,
     description TEXT NOT NULL, -- Краткое описание запроса
@@ -60,7 +64,7 @@ c.execute('''CREATE TABLE chats (
     consultation_id INTEGER NOT NULL,
     doctor_id INTEGER NOT NULL,
     patient_id INTEGER NOT NULL,
-    messages JSON NOT NULL, -- JSON-структура хранения сообщений
+    messages JSON, -- JSON-структура хранения сообщений
     last_message_time DATETIME DEFAULT CURRENT_TIMESTAMP,
     is_open INTEGER DEFAULT 1, -- 1 = чат активен, 0 = закрыт
     FOREIGN KEY(consultation_id) REFERENCES consultations(id),
@@ -107,3 +111,11 @@ c.execute('''CREATE TABLE specialisation (
     price REAL NOT NULL -- Цена консультации
 )''')
 print("Таблица specialisation создана или уже существует.")
+
+c.execute('''CREATE TABLE temporary_data (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL UNIQUE,
+    data INTEGER NOT NULL, -- Временные данные
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+)''')
+print("Таблица temporary_data создана или уже существует.")
