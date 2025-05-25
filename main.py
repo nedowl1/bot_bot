@@ -9,6 +9,7 @@ import os
 import base64
 import requests
 import datetime
+from datetime import datetime, timedelta
 
 TOKEN = "8156778620:AAGDqv6M3xzOH75owFRtTGU59EPaz_Mz0II"
 #CLOUDPAYMENTS_PUBLIC_ID = "YOUR_PUBLIC_ID"
@@ -576,7 +577,7 @@ def create_chat(message, call):
     cursor.execute('''SELECT * FROM consultations WHERE identifier = ?''', (call.data.replace("approve", ""),))
     consultation = cursor.fetchone()
     if consultation:
-        cursor.execute('''INSERT INTO chats (consultation_id, doctor_id, patient_id) VALUES (?, ?, ?)''', (consultation[1], consultation[2], consultation[3]))
+        cursor.execute('''INSERT INTO chats (consultation_id, doctor_id, patient_id) VALUES (?, ?, ?)''', (consultation[1], consultation[3], consultation[2]))
         conn.commit()
         bot.send_message(consultation[2], "Чат создан.")
         bot.send_message(consultation[3], "Чат создан.")
@@ -648,6 +649,33 @@ def handle_message(message):
     elif message.text == "Отправить аудио-сообщение":
         bot.send_message(message.chat.id, "Отправьте голосовое-собщение:")
         bot.register_next_step_handler(message, send_vocie_message)
+    elif message.text == "Завершить консультацию":
+        pass
+    elif message.text == "Назад":
+        bot.send_message(message.chat.id, "Вы вернулись в главное меню.", reply_markup=types.ReplyKeyboardRemove())
+        conn, cursor = connect_db()
+        cursor.execute('''SELECT * FROM patients WHERE user_id = ?''', (message.from_user.id,))
+        patient = cursor.fetchone()
+        if patient:
+            cursor.execute('''SELECT active_chat_id FROM patients WHERE user_id = ?''', (message.from_user.id,))
+            active_chat_id = cursor.fetchone()
+        else:
+            cursor.execute('''SELECT active_chat_id FROM doctors WHERE user_id = ?''', (message.from_user.id,))
+            active_chat_id = cursor.fetchone()
+        cursor.execute('''SELECT * FROM chats WHERE consultation_id = ?''', (active_chat_id[0],))
+        chats = cursor.fetchall()
+        chats = chats[0]
+        print('chats', chats)
+        
+        if chats[2] == message.from_user.id:
+            cursor.execute('''UPDATE patients SET active_chat_id = NULL WHERE user_id = ?''', (message.from_user.id,))
+            conn.commit()
+            print('patients', chats[2])
+        elif chats[3] == message.from_user.id:
+            cursor.execute('''UPDATE doctors SET active_chat_id = NULL WHERE user_id = ?''', (message.from_user.id,))
+            conn.commit()
+            print('doctors', chats[3])
+        start(message)
     else:
         try:
             msg = message.text
@@ -665,19 +693,41 @@ def send_text_message(message):
     pac_dont_chat = 1
     doc_dont_chat = 1
     print('message', message.from_user.id)
-    try:
+    try: 
         cursor.execute('''SELECT * FROM patients WHERE user_id = ?''', (message.from_user.id,))
         data_pac = cursor.fetchone()
-        print('data', data_pac)
+        print('data_pac', data_pac)
         active_chat_id = data_pac[8]
         name = data_pac[2]
+        cursor.execute('''SELECT * FROM chats WHERE consultation_id = ?''', (active_chat_id,))
+        chat = cursor.fetchone()
+        print('chat', chat)
+        doc_id = chat[2]
+        print('doc_id', doc_id)
+        cursor.execute('''SELECT * FROM doctors WHERE user_id = ?''', (doc_id,))
+        data_doc = cursor.fetchone()
+        print('data_doc', data_doc)
+        if data_doc[12] == None:
+            doc_dont_chat = 0
+    
     except TypeError:
         cursor.execute('''SELECT * FROM doctors WHERE user_id = ?''', (message.from_user.id,))
         data_doc = cursor.fetchone()
-        print('data', data_doc)
+        print('data_doc', data_doc)
         active_chat_id = data_doc[12]
+        print('active_chat_id', active_chat_id)
         name = data_doc[2]
+        cursor.execute('''SELECT * FROM chats WHERE consultation_id = ?''', (active_chat_id,))
+        chat = cursor.fetchone()
+        print('chat', chat)
+        pac_id = chat[3]
+        cursor.execute('''SELECT * FROM patients WHERE user_id = ?''', (pac_id,))
+        data_pac = cursor.fetchone()
+        print('data_pac', data_pac)
+        if data_pac[8] == None:
+            pac_dont_chat = 0
     print('name', name)
+    
     if active_chat_id == None:
         cursor.execute('''SELECT active_chat_id FROM doctors WHERE user_id = ?''', (message.from_user.id,))
         active_chat_id = cursor.fetchone()
@@ -702,7 +752,7 @@ def send_text_message(message):
     cursor.execute('''SELECT * FROM chats WHERE consultation_id = ?''', (active_chat_id,))
     chat = cursor.fetchone()
     print('chat', chat)
-    cursor.execute('''SELECT messages FROM chats WHERE id = ?''', (active_chat_id,))
+    cursor.execute('''SELECT messages FROM chats WHERE consultation_id = ?''', (active_chat_id,))
     row = cursor.fetchone()
     if row:
         messages = json.loads(row[0])
@@ -710,30 +760,30 @@ def send_text_message(message):
         messages = []
     
     if chat:
-        if chat[2] == message.from_user.id and doc_dont_chat:
-            bot.send_message(chat[3], text = f'Сообщение от пациента {name}\n {message.text}')  # Отправляем сообщение врачу
+        if chat[3] == message.from_user.id and pac_dont_chat:
+            bot.send_message(chat[2], text = f'Сообщение от пациента {name}\n {message.text}')  # Отправляем сообщение врачу
             print('Сообщение от пациента', message.text)
             messages.append({
                 "sender": "patient",
                 "text": message.text,
                 "timestamp": datetime.fromtimestamp(message.date).strftime('%Y-%m-%d %H:%M:%S')
             })
-        elif chat[3] == message.from_user.id and pac_dont_chat:
-            bot.send_message(chat[2], text = f'Сообщение от врача {name}\n {message.text}')
+        elif chat[2] == message.from_user.id and doc_dont_chat:
+            bot.send_message(chat[3], text = f'Сообщение от врача {name}\n {message.text}')
             messages.append({
                 "sender": "doctor",
                 "text": message.text,
                 "timestamp": datetime.fromtimestamp(message.date).strftime('%Y-%m-%d %H:%M:%S')
             })
-        elif chat[2] == message.from_user.id:
-            bot.send_message(chat[3], text = f'Сообщение от пациента {name}')
+        elif chat[3] == message.from_user.id:
+            bot.send_message(chat[2], text = f'Новое сообщение от пациента {name}\n {message.text}')
             messages.append({
                 "sender": "patient",
                 "text": message.text,
                 "timestamp": datetime.fromtimestamp(message.date).strftime('%Y-%m-%d %H:%M:%S')
             })
-        elif chat[3] == message.from_user.id:
-            bot.send_message(chat[2], text = f'Сообщение от врача {name}')
+        elif chat[2] == message.from_user.id:
+            bot.send_message(chat[3], text = f'Новое сообщение от врача {name}\n {message.text}')
             messages.append({
                 "sender": "doctor",
                 "text": message.text,
@@ -752,22 +802,48 @@ def send_photo_message(message):
     conn, cursor = connect_db()
     pac_dont_chat = 1
     doc_dont_chat = 1
-    try:
+    try: 
         cursor.execute('''SELECT * FROM patients WHERE user_id = ?''', (message.from_user.id,))
         data_pac = cursor.fetchone()
+        print('data_pac', data_pac)
         active_chat_id = data_pac[8]
         name = data_pac[2]
+        cursor.execute('''SELECT * FROM chats WHERE consultation_id = ?''', (active_chat_id,))
+        chat = cursor.fetchone()
+        print('chat', chat)
+        doc_id = chat[2]
+        print('doc_id', doc_id)
+        cursor.execute('''SELECT * FROM doctors WHERE user_id = ?''', (doc_id,))
+        data_doc = cursor.fetchone()
+        print('data_doc', data_doc)
+        if data_doc[12] == None:
+            doc_dont_chat = 0
+    
     except TypeError:
         cursor.execute('''SELECT * FROM doctors WHERE user_id = ?''', (message.from_user.id,))
         data_doc = cursor.fetchone()
+        print('data_doc', data_doc)
         active_chat_id = data_doc[12]
+        print('active_chat_id', active_chat_id)
         name = data_doc[2]
+        cursor.execute('''SELECT * FROM chats WHERE consultation_id = ?''', (active_chat_id,))
+        chat = cursor.fetchone()
+        print('chat', chat)
+        pac_id = chat[3]
+        cursor.execute('''SELECT * FROM patients WHERE user_id = ?''', (pac_id,))
+        data_pac = cursor.fetchone()
+        print('data_pac', data_pac)
+        if data_pac[8] == None:
+            pac_dont_chat = 0
+    print('name', name)
+    
     if active_chat_id == None:
         cursor.execute('''SELECT active_chat_id FROM doctors WHERE user_id = ?''', (message.from_user.id,))
         active_chat_id = cursor.fetchone()
         pac_dont_chat = 0
         if active_chat_id == None:
             doc_dont_chat = 0
+    print('active_chat_id', active_chat_id)
     if active_chat_id == None:
         bot.send_message(message.chat.id, "У вас нет активного чата. Пожалуйста, выберите врача и начните консультацию.")
         return
@@ -777,6 +853,7 @@ def send_photo_message(message):
     if active_chat_id == None:
         cursor.execute('''SELECT active_chat_id FROM doctors WHERE user_id = ?''', (message.from_user.id,))
         active_chat_id = cursor.fetchone()
+    print('active_chat_id', active_chat_id)
     if active_chat_id == None:
         bot.send_message(message.chat.id, "У вас нет активного чата. Пожалуйста, выберите врача и начните консультацию.")
         return
@@ -784,55 +861,41 @@ def send_photo_message(message):
     cursor.execute('''SELECT * FROM chats WHERE consultation_id = ?''', (active_chat_id,))
     chat = cursor.fetchone()
     print('chat', chat)
-    cursor.execute('''SELECT messages FROM chats WHERE id = ?''', (active_chat_id,))
+    cursor.execute('''SELECT messages FROM chats WHERE consultation_id = ?''', (active_chat_id,))
     row = cursor.fetchone()
     if row:
         messages = json.loads(row[0])
     else:
         messages = []
-    
     if chat:
-        if chat[2] == message.from_user.id and doc_dont_chat:
+        if chat[3] == message.from_user.id and pac_dont_chat:
             file_info = bot.get_file(message.photo[-1].file_id)
             file_path = file_info.file_path
             downloaded_file = bot.download_file(file_path)
             local_path = f"media/photos/{message.photo[-1].file_id}.jpg"
             with open(local_path, 'wb') as f:
                 f.write(downloaded_file)
-            bot.send_photo(chat[3], photo=open(local_path, 'rb'), caption=f'Сообщение от пациента {name}')
-            messages.append({
-            "sender": "patient",
-            "text": f'Сообщение от пациента {name}',
-            "photo": local_path,
-            "timestamp": datetime.datetime.fromtimestamp(message.date).strftime('%Y-%m-%d %H:%M:%S')
-            })
-        elif chat[3] == message.from_user.id and pac_dont_chat:
-            file_info = bot.get_file(message.photo[-1].file_id)
-            file_path = file_info.file_path
-            downloaded_file = bot.download_file(file_path)
-            local_path = f"media/photos/{message.photo[-1].file_id}.jpg"
-            with open(local_path, 'wb') as f:
-                f.write(downloaded_file)
-            bot.send_photo(chat[2], photo=open(local_path, 'rb'), caption=f'Сообщение от врача {name}')
-            messages.append({
-                "sender": "doctor",
-                "text": f'Сообщение от врача {name}',
-                "photo": local_path,
-                "timestamp": datetime.datetime.fromtimestamp(message.date).strftime('%Y-%m-%d %H:%M:%S')
-            })
-        elif chat[2] == message.from_user.id:
-            file_info = bot.get_file(message.photo[-1].file_id)
-            file_path = file_info.file_path
-            downloaded_file = bot.download_file(file_path)
-            local_path = f"media/photos/{message.photo[-1].file_id}.jpg"
-            with open(local_path, 'wb') as f:
-                f.write(downloaded_file)
-            bot.send_photo(chat[3], photo=open(local_path, 'rb'), caption=f'Сообщение от пациента {name}')
+            bot.send_photo(chat[2], photo=message.photo[-1].file_id, caption=f'Сообщение от пациента {name}\n {message.caption or ""}')
+            print('Сообщение от пациента', message.photo[-1].file_id)
             messages.append({
                 "sender": "patient",
-                "text": f'Сообщение от пациента {name}',
+                "text": message.caption or "",
                 "photo": local_path,
-                "timestamp": datetime.datetime.fromtimestamp(message.date).strftime('%Y-%m-%d %H:%M:%S')
+                "timestamp": datetime.fromtimestamp(message.date).strftime('%Y-%m-%d %H:%M:%S')
+            })
+        elif chat[2] == message.from_user.id and doc_dont_chat:
+            file_info = bot.get_file(message.photo[-1].file_id)
+            file_path = file_info.file_path
+            downloaded_file = bot.download_file(file_path)
+            local_path = f"media/photos/{message.photo[-1].file_id}.jpg"
+            with open(local_path, 'wb') as f:
+                f.write(downloaded_file)
+            bot.send_photo(chat[3], photo=message.photo[-1].file_id, caption=f'Сообщение от врача {name}\n {message.caption or ""}')
+            messages.append({
+                "sender": "doctor",
+                "text": message.caption or "",
+                "photo": local_path,
+                "timestamp": datetime.fromtimestamp(message.date).strftime('%Y-%m-%d %H:%M:%S')
             })
         elif chat[3] == message.from_user.id:
             file_info = bot.get_file(message.photo[-1].file_id)
@@ -841,12 +904,26 @@ def send_photo_message(message):
             local_path = f"media/photos/{message.photo[-1].file_id}.jpg"
             with open(local_path, 'wb') as f:
                 f.write(downloaded_file)
-            bot.send_photo(chat[2], photo=open(local_path, 'rb'), caption=f'Сообщение от врача {name}')
+            bot.send_photo(chat[2], photo=message.photo[-1].file_id, caption=f'Новое сообщение от пациента {name}\n {message.caption or ""}')
+            messages.append({
+                "sender": "patient",
+                "text": message.caption or "",
+                "photo": local_path,
+                "timestamp": datetime.fromtimestamp(message.date).strftime('%Y-%m-%d %H:%M:%S')
+            })
+        elif chat[2] == message.from_user.id:
+            file_info = bot.get_file(message.photo[-1].file_id)
+            file_path = file_info.file_path
+            downloaded_file = bot.download_file(file_path)
+            local_path = f"media/photos/{message.photo[-1].file_id}.jpg"
+            with open(local_path, 'wb') as f:
+                f.write(downloaded_file)
+            bot.send_photo(chat[3], photo=message.photo[-1].file_id, caption=f'Новое сообщение от врача {name}\n {message.caption or ""}')
             messages.append({
                 "sender": "doctor",
-                "text": f'Сообщение от врача {name}',
+                "text": message.caption or "",
                 "photo": local_path,
-                "timestamp": datetime.datetime.fromtimestamp(message.date).strftime('%Y-%m-%d %H:%M:%S')
+                "timestamp": datetime.fromtimestamp(message.date).strftime('%Y-%m-%d %H:%M:%S')
             })
         # сохраняем сообщение в json в базе данных
         messages_json = json.dumps(messages, ensure_ascii=False)
@@ -860,22 +937,48 @@ def send_video_message(message):
     conn, cursor = connect_db()
     pac_dont_chat = 1
     doc_dont_chat = 1
-    try:
+    try: 
         cursor.execute('''SELECT * FROM patients WHERE user_id = ?''', (message.from_user.id,))
         data_pac = cursor.fetchone()
+        print('data_pac', data_pac)
         active_chat_id = data_pac[8]
         name = data_pac[2]
+        cursor.execute('''SELECT * FROM chats WHERE consultation_id = ?''', (active_chat_id,))
+        chat = cursor.fetchone()
+        print('chat', chat)
+        doc_id = chat[2]
+        print('doc_id', doc_id)
+        cursor.execute('''SELECT * FROM doctors WHERE user_id = ?''', (doc_id,))
+        data_doc = cursor.fetchone()
+        print('data_doc', data_doc)
+        if data_doc[12] == None:
+            doc_dont_chat = 0
+    
     except TypeError:
         cursor.execute('''SELECT * FROM doctors WHERE user_id = ?''', (message.from_user.id,))
         data_doc = cursor.fetchone()
+        print('data_doc', data_doc)
         active_chat_id = data_doc[12]
+        print('active_chat_id', active_chat_id)
         name = data_doc[2]
+        cursor.execute('''SELECT * FROM chats WHERE consultation_id = ?''', (active_chat_id,))
+        chat = cursor.fetchone()
+        print('chat', chat)
+        pac_id = chat[3]
+        cursor.execute('''SELECT * FROM patients WHERE user_id = ?''', (pac_id,))
+        data_pac = cursor.fetchone()
+        print('data_pac', data_pac)
+        if data_pac[8] == None:
+            pac_dont_chat = 0
+    print('name', name)
+    
     if active_chat_id == None:
         cursor.execute('''SELECT active_chat_id FROM doctors WHERE user_id = ?''', (message.from_user.id,))
         active_chat_id = cursor.fetchone()
         pac_dont_chat = 0
         if active_chat_id == None:
             doc_dont_chat = 0
+    print('active_chat_id', active_chat_id)
     if active_chat_id == None:
         bot.send_message(message.chat.id, "У вас нет активного чата. Пожалуйста, выберите врача и начните консультацию.")
         return
@@ -885,6 +988,7 @@ def send_video_message(message):
     if active_chat_id == None:
         cursor.execute('''SELECT active_chat_id FROM doctors WHERE user_id = ?''', (message.from_user.id,))
         active_chat_id = cursor.fetchone()
+    print('active_chat_id', active_chat_id)
     if active_chat_id == None:
         bot.send_message(message.chat.id, "У вас нет активного чата. Пожалуйста, выберите врача и начните консультацию.")
         return
@@ -892,96 +996,125 @@ def send_video_message(message):
     cursor.execute('''SELECT * FROM chats WHERE consultation_id = ?''', (active_chat_id,))
     chat = cursor.fetchone()
     print('chat', chat)
-    cursor.execute('''SELECT messages FROM chats WHERE id = ?''', (active_chat_id,))
+    cursor.execute('''SELECT messages FROM chats WHERE consultation_id = ?''', (active_chat_id,))
     row = cursor.fetchone()
     if row:
         messages = json.loads(row[0])
     else:
         messages = []
-    
     if chat:
-        if chat[2] == message.from_user.id and doc_dont_chat:
+        if chat[3] == message.from_user.id and pac_dont_chat:
             file_info = bot.get_file(message.video.file_id)
             file_path = file_info.file_path
-            downloaded_file= bot.download_file(file_path)
+            downloaded_file = bot.download_file(file_path)
             local_path = f"media/videos/{message.video.file_id}.mp4"
             with open(local_path, 'wb') as f:
                 f.write(downloaded_file)
-            bot.send_video(chat[3], video=open(local_path, 'rb'), caption=f'Сообщение от пациента {name}')
+            bot.send_video(chat[2], video=message.video.file_id, caption=f'Сообщение от пациента {name}\n {message.caption or ""}')
+            print('Сообщение от пациента', message.video.file_id)
             messages.append({
                 "sender": "patient",
-                "text": f'Сообщение от пациента {name}',
+                "text": message.caption or "",
                 "video": local_path,
-                "timestamp": datetime.datetime.fromtimestamp(message.date).strftime('%Y-%m-%d %H:%M:%S')
+                "timestamp": datetime.fromtimestamp(message.date).strftime('%Y-%m-%d %H:%M:%S')
             })
-        elif chat[3] == message.from_user.id and pac_dont_chat:
+        elif chat[2] == message.from_user.id and doc_dont_chat:
             file_info = bot.get_file(message.video.file_id)
             file_path = file_info.file_path
-            downloaded_file= bot.download_file(file_path)
+            downloaded_file = bot.download_file(file_path)
             local_path = f"media/videos/{message.video.file_id}.mp4"
             with open(local_path, 'wb') as f:
                 f.write(downloaded_file)
-            bot.send_video(chat[2], video=open(local_path, 'rb'), caption=f'Сообщение от врача {name}')
+            bot.send_video(chat[3], video=message.video.file_id, caption=f'Сообщение от врача {name}\n {message.caption or ""}')
             messages.append({
                 "sender": "doctor",
-                "text": f'Сообщение от врача {name}',
+                "text": message.caption or "",
                 "video": local_path,
-                "timestamp": datetime.datetime.fromtimestamp(message.date).strftime('%Y-%m-%d %H:%M:%S')
-            })
-        elif chat[2] == message.from_user.id:
-            file_info = bot.get_file(message.video.file_id)
-            file_path = file_info.file_path
-            downloaded_file= bot.download_file(file_path)
-            local_path = f"media/videos/{message.video.file_id}.mp4"
-            with open(local_path, 'wb') as f:
-                f.write(downloaded_file)
-            bot.send_video(chat[3], video=open(local_path, 'rb'), caption=f'Сообщение от пациента {name}')
-            messages.append({
-                "sender": "patient",
-                "text": f'Сообщение от пациента {name}',
-                "video": local_path,
-                "timestamp": datetime.datetime.fromtimestamp(message.date).strftime('%Y-%m-%d %H:%M:%S')
+                "timestamp": datetime.fromtimestamp(message.date).strftime('%Y-%m-%d %H:%M:%S')
             })
         elif chat[3] == message.from_user.id:
             file_info = bot.get_file(message.video.file_id)
             file_path = file_info.file_path
-            downloaded_file= bot.download_file(file_path)
+            downloaded_file = bot.download_file(file_path)
             local_path = f"media/videos/{message.video.file_id}.mp4"
             with open(local_path, 'wb') as f:
                 f.write(downloaded_file)
-            bot.send_video(chat[2], video=open(local_path, 'rb'), caption=f'Сообщение от врача {name}')
+            bot.send_video(chat[2], video=message.video.file_id, caption=f'Новое сообщение от пациента {name}\n {message.caption or ""}')
+            messages.append({
+                "sender": "patient",
+                "text": message.caption or "",
+                "video": local_path,
+                "timestamp": datetime.fromtimestamp(message.date).strftime('%Y-%m-%d %H:%M:%S')
+            })
+        elif chat[2] == message.from_user.id:
+            file_info = bot.get_file(message.video.file_id)
+            file_path = file_info.file_path
+            downloaded_file = bot.download_file(file_path)
+            local_path = f"media/videos/{message.video.file_id}.mp4"
+            with open(local_path, 'wb') as f:
+                f.write(downloaded_file)
+            bot.send_video(chat[3], video=message.video.file_id, caption=f'Новое сообщение от врача {name}\n {message.caption or ""}')
             messages.append({
                 "sender": "doctor",
-                "text": f'Сообщение от врача {name}',
+                "text": message.caption or "",
                 "video": local_path,
-                "timestamp": datetime.datetime.fromtimestamp(message.date).strftime('%Y-%m-%d %H:%M:%S')
+                "timestamp": datetime.fromtimestamp(message.date).strftime('%Y-%m-%d %H:%M:%S')
             })
         # сохраняем сообщение в json в базе данных
         messages_json = json.dumps(messages, ensure_ascii=False)
         cursor.execute('''UPDATE chats SET messages = ? WHERE consultation_id = ?''', (messages_json, active_chat_id))
         conn.commit()
         print('Сообщение сохранено в базе данных', messages_json)
+        
+    else:
+        bot.send_message(message.chat.id, "Чат не найден.")
 
 def send_vocie_message(message):
     conn, cursor = connect_db()
     pac_dont_chat = 1
     doc_dont_chat = 1
-    try:
+    try: 
         cursor.execute('''SELECT * FROM patients WHERE user_id = ?''', (message.from_user.id,))
         data_pac = cursor.fetchone()
+        print('data_pac', data_pac)
         active_chat_id = data_pac[8]
         name = data_pac[2]
+        cursor.execute('''SELECT * FROM chats WHERE consultation_id = ?''', (active_chat_id,))
+        chat = cursor.fetchone()
+        print('chat', chat)
+        doc_id = chat[2]
+        print('doc_id', doc_id)
+        cursor.execute('''SELECT * FROM doctors WHERE user_id = ?''', (doc_id,))
+        data_doc = cursor.fetchone()
+        print('data_doc', data_doc)
+        if data_doc[12] == None:
+            doc_dont_chat = 0
+    
     except TypeError:
         cursor.execute('''SELECT * FROM doctors WHERE user_id = ?''', (message.from_user.id,))
         data_doc = cursor.fetchone()
+        print('data_doc', data_doc)
         active_chat_id = data_doc[12]
+        print('active_chat_id', active_chat_id)
         name = data_doc[2]
+        cursor.execute('''SELECT * FROM chats WHERE consultation_id = ?''', (active_chat_id,))
+        chat = cursor.fetchone()
+        print('chat', chat)
+        pac_id = chat[3]
+        cursor.execute('''SELECT * FROM patients WHERE user_id = ?''', (pac_id,))
+        data_pac = cursor.fetchone()
+        print('data_pac', data_pac)
+        if data_pac[8] == None:
+            pac_dont_chat = 0
+    print('name', name)
+    
     if active_chat_id == None:
         cursor.execute('''SELECT active_chat_id FROM doctors WHERE user_id = ?''', (message.from_user.id,))
         active_chat_id = cursor.fetchone()
         pac_dont_chat = 0
         if active_chat_id == None:
             doc_dont_chat = 0
+    print('active_chat_id', active_chat_id)
     if active_chat_id == None:
         bot.send_message(message.chat.id, "У вас нет активного чата. Пожалуйста, выберите врача и начните консультацию.")
         return
@@ -991,6 +1124,7 @@ def send_vocie_message(message):
     if active_chat_id == None:
         cursor.execute('''SELECT active_chat_id FROM doctors WHERE user_id = ?''', (message.from_user.id,))
         active_chat_id = cursor.fetchone()
+    print('active_chat_id', active_chat_id)
     if active_chat_id == None:
         bot.send_message(message.chat.id, "У вас нет активного чата. Пожалуйста, выберите врача и начните консультацию.")
         return
@@ -998,74 +1132,78 @@ def send_vocie_message(message):
     cursor.execute('''SELECT * FROM chats WHERE consultation_id = ?''', (active_chat_id,))
     chat = cursor.fetchone()
     print('chat', chat)
-    cursor.execute('''SELECT messages FROM chats WHERE id = ?''', (active_chat_id,))
+    cursor.execute('''SELECT messages FROM chats WHERE consultation_id = ?''', (active_chat_id,))
     row = cursor.fetchone()
+    print('row', row)
     if row:
         messages = json.loads(row[0])
     else:
         messages = []
-    
     if chat:
-        if chat[2] == message.from_user.id and doc_dont_chat:
+        if chat[3] == message.from_user.id and pac_dont_chat:
             file_info = bot.get_file(message.voice.file_id)
             file_path = file_info.file_path
-            downloaded_file= bot.download_file(file_path)        
-            local_path = f"media/voice/{message.voice.file_id}.ogg"
+            downloaded_file = bot.download_file(file_path)
+            local_path = f"media/voices/{message.voice.file_id}.ogg"
             with open(local_path, 'wb') as f:
                 f.write(downloaded_file)
-            bot.send_voice(chat[3], voice=open(local_path, 'rb'), caption=f'Сообщение от пациента {name}')
+            bot.send_voice(chat[2], voice=message.voice.file_id, caption=f'Сообщение от пациента {name}\n {message.caption or ""}')
+            print('Сообщение от пациента', message.voice.file_id)
             messages.append({
                 "sender": "patient",
-                "text": f'Сообщение от пациента {name}',
+                "text": message.caption or "",
                 "voice": local_path,
-                "timestamp": datetime.datetime.fromtimestamp(message.date).strftime('%Y-%m-%d %H:%M:%S')
+                "timestamp": datetime.fromtimestamp(message.date).strftime('%Y-%m-%d %H:%M:%S')
             })
-        elif chat[3] == message.from_user.id and pac_dont_chat:
+        elif chat[2] == message.from_user.id and doc_dont_chat:
             file_info = bot.get_file(message.voice.file_id)
             file_path = file_info.file_path
-            downloaded_file= bot.download_file(file_path)        
-            local_path = f"media/voice/{message.voice.file_id}.ogg"
+            downloaded_file = bot.download_file(file_path)
+            local_path = f"media/voices/{message.voice.file_id}.ogg"
             with open(local_path, 'wb') as f:
                 f.write(downloaded_file)
-            bot.send_voice(chat[2], voice=open(local_path, 'rb'), caption=f'Сообщение от врача {name}')
+            bot.send_voice(chat[3], voice=message.voice.file_id, caption=f'Сообщение от врача {name}\n {message.caption or ""}')
             messages.append({
                 "sender": "doctor",
-                "text": f'Сообщение от врача {name}',
+                "text": message.caption or "",
                 "voice": local_path,
-                "timestamp": datetime.datetime.fromtimestamp(message.date).strftime('%Y-%m-%d %H:%M:%S')
-            })
-        elif chat[2] == message.from_user.id:
-            file_info = bot.get_file(message.voice.file_id)
-            file_path = file_info.file_path
-            downloaded_file= bot.download_file(file_path)        
-            local_path = f"media/voice/{message.voice.file_id}.ogg"
-            with open(local_path, 'wb') as f:
-                f.write(downloaded_file)
-            bot.send_voice(chat[3], voice=open(local_path, 'rb'), caption=f'Сообщение от пациента {name}')
-            messages.append({
-                "sender": "patient",
-                "text": f'Сообщение от пациента {name}',
-                "voice": local_path,
-                "timestamp": datetime.datetime.fromtimestamp(message.date).strftime('%Y-%m-%d %H:%M:%S')
+                "timestamp": datetime.fromtimestamp(message.date).strftime('%Y-%m-%d %H:%M:%S')
             })
         elif chat[3] == message.from_user.id:
             file_info = bot.get_file(message.voice.file_id)
             file_path = file_info.file_path
-            downloaded_file= bot.download_file(file_path)        
-            local_path = f"media/voice/{message.voice.file_id}.ogg"
+            downloaded_file = bot.download_file(file_path)
+            local_path = f"media/voices/{message.voice.file_id}.ogg"
             with open(local_path, 'wb') as f:
                 f.write(downloaded_file)
-            bot.send_voice(chat[2], voice=open(local_path, 'rb'), caption=f'Сообщение от врача {name}')
+            bot.send_voice(chat[2], voice=message.voice.file_id, caption=f'Новое сообщение от пациента {name}\n {message.caption or ""}')
+            messages.append({
+                "sender": "patient",
+                "text": message.caption or "",
+                "voice": local_path,
+                "timestamp": datetime.fromtimestamp(message.date).strftime('%Y-%m-%d %H:%M:%S')
+            })
+        elif chat[2] == message.from_user.id:
+            file_info = bot.get_file(message.voice.file_id)
+            file_path = file_info.file_path
+            downloaded_file = bot.download_file(file_path)
+            local_path = f"media/voices/{message.voice.file_id}.ogg"
+            with open(local_path, 'wb') as f:
+                f.write(downloaded_file)
+            bot.send_voice(chat[3], voice=message.voice.file_id, caption=f'Новое сообщение от врача {name}\n {message.caption or ""}')
             messages.append({
                 "sender": "doctor",
-                "text": f'Сообщение от врача {name}',
+                "text": message.caption or "",
                 "voice": local_path,
-                "timestamp": datetime.datetime.fromtimestamp(message.date).strftime('%Y-%m-%d %H:%M:%S')
+                "timestamp": datetime.fromtimestamp(message.date).strftime('%Y-%m-%d %H:%M:%S')
             })
         # сохраняем сообщение в json в базе данных
         messages_json = json.dumps(messages, ensure_ascii=False)
         cursor.execute('''UPDATE chats SET messages = ? WHERE consultation_id = ?''', (messages_json, active_chat_id))
         conn.commit()
+        print('Сообщение сохранено в базе данных', messages_json)
+    else:
+        bot.send_message(message.chat.id, "Чат не найден.")
 
 
 @bot.callback_query_handler(func=lambda call: True)
