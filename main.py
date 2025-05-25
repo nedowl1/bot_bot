@@ -624,13 +624,14 @@ def chats(message, call):
         bot.send_message(message.chat.id, text=text, reply_markup=marcup)
     bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text="Чаты", reply_markup=None)
 
-def start_chat(call):
+def start_chat(call, chat_id_end):
     marcup = types.ReplyKeyboardMarkup(resize_keyboard=True)
     text = types.KeyboardButton(text="Отправить сообщение")
     img = types.KeyboardButton(text="Отправить фото")
     video = types.KeyboardButton(text="Отправить видео")
     audio = types.KeyboardButton(text="Отправить аудио-сообщение")
     end_consult = types.KeyboardButton(text="Завершить консультацию")
+    
     back = types.KeyboardButton(text="Назад")
     marcup.add(text, img, video, audio, end_consult, back)
     bot.send_message(call.message.chat.id, "Выберите действие:", reply_markup=marcup)
@@ -1355,7 +1356,7 @@ def callback_query(call):
                     cursor.execute('''UPDATE patients SET active_chat_id = ? WHERE user_id = ?''', (chat_id, consultation[2]))
                     conn.commit()
                 bot.send_message(call.message.chat.id, "Вы можете начать общение в этом чате.")
-                start_chat(call)
+                start_chat(call, chat_id_end)
             else:
                 bot.send_message(call.message.chat.id, "Консультация не найдена.")
         else:
