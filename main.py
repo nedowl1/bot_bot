@@ -10,6 +10,7 @@ import base64
 import requests
 import datetime
 from datetime import datetime, timedelta
+import time
 
 TOKEN = "8156778620:AAGDqv6M3xzOH75owFRtTGU59EPaz_Mz0II"
 #CLOUDPAYMENTS_PUBLIC_ID = "YOUR_PUBLIC_ID"
@@ -631,9 +632,12 @@ def start_chat(call, chat_id_end):
     video = types.KeyboardButton(text="Отправить видео")
     audio = types.KeyboardButton(text="Отправить аудио-сообщение")
     end_consult = types.KeyboardButton(text="Завершить консультацию")
-    
     back = types.KeyboardButton(text="Назад")
-    marcup.add(text, img, video, audio, end_consult, back)
+    if chat_id_end:
+        marcup.add(text, img, video, audio, end_consult, back)
+    else:
+        spor = types.KeyboardButton(text="Оспорить консультацию")
+        marcup.add(text, img, video, audio, end_consult, spor, back)
     bot.send_message(call.message.chat.id, "Выберите действие:", reply_markup=marcup)
 
 @bot.message_handler(content_types=['text', 'photo', 'video', 'audio'])
@@ -677,6 +681,9 @@ def handle_message(message):
             conn.commit()
             print('doctors', chats[3])
         start(message)
+    elif message.text == "Оспорить консультацию":
+        bot.send_message(message.chat.id, "Введите причину спора:")
+        bot.register_next_step_handler(message, dispute_consultation)
     else:
         try:
             msg = message.text
@@ -688,6 +695,18 @@ def handle_message(message):
         except Exception as e:
             print(f"Ошибка при обработке сообщения: {e}")
             bot.send_message(message.chat.id, "Произошла ошибка. Пожалуйста, попробуйте еще раз.")
+
+def dispute_consultation(message):
+    message_text = message.text
+    conn, cursor = connect_db()
+    cursor.execute('''SELECT active_chat_id FROM patients WHERE user_id = ?''', (message.from_user.id,))
+    active_chat_id = cursor.fetchone()
+    cursor.execute('''SELECT * FROM chats WHERE consultation_id = ?''', (active_chat_id))
+    chat = cursor.fetchone()
+    marcup = types.InlineKeyboardMarkup(row_width=2)
+    view_chat = types.InlineKeyboardButton(text="Посмотреть чат", callback_data=f"view_chat_{chat[1]}")
+    marcup.add(view_chat)
+    bot.send_message(ADMIN_ID, f"Пациент {message.from_user.id} оспорил консультацию.\nПричина: {message_text}\nЧат: {chat[1]}", reply_markup=marcup)
 
 def send_text_message(message):
     conn, cursor = connect_db()
@@ -755,7 +774,8 @@ def send_text_message(message):
     print('chat', chat)
     cursor.execute('''SELECT messages FROM chats WHERE consultation_id = ?''', (active_chat_id,))
     row = cursor.fetchone()
-    if row:
+    print('row', row)
+    if row[0] != None:
         messages = json.loads(row[0])
     else:
         messages = []
@@ -1359,6 +1379,54 @@ def callback_query(call):
                 start_chat(call, chat_id_end)
             else:
                 bot.send_message(call.message.chat.id, "Консультация не найдена.")
+        else:
+            bot.send_message(call.message.chat.id, "Чат не найден.")
+    elif call.data.startswith("view_chat_"):
+        chat_id = call.data.replace("view_chat_", "")
+        print('view_chat_id', chat_id)
+        conn, cursor = connect_db()
+        cursor.execute('''SELECT * FROM chats WHERE consultation_id = ?''', (chat_id,))
+        chat = cursor.fetchone()
+        print('chat', chat)
+        if chat:
+            cursor.execute('''SELECT messages FROM chats WHERE consultation_id = ?''', (chat_id,))
+            row = cursor.fetchone()
+            if row:
+                messages = json.loads(row[0])
+                print('messages', messages)
+                count_messages = 0
+                for message in messages:
+                    # Отправляем по 10 сообщений в секунду
+                    if count_messages >= 10:
+                        time.sleep(1)
+                        count_messages = 0
+                    count_messages += 1
+                    if message['sender'] == 'patient':
+                        if 'photo' in message:
+                            with open(message['photo'], 'rb') as photo_file:
+                                bot.send_photo(call.message.chat.id, photo=photo_file, caption=f"Пациент: {message['text']}")
+                        elif 'video' in message:
+                            with open(message['video'], 'rb') as video_file:
+                                bot.send_video(call.message.chat.id, video=video_file, caption=f"Пациент: {message['text']}")
+                        elif 'voice' in message:
+                            with open(message['voice'], 'rb') as voice_file:
+                                bot.send_voice(call.message.chat.id, voice=voice_file, caption=f"Пациент: {message['text']}")
+                        else:   
+                            bot.send_message(call.message.chat.id, f"Пациент: {message['text']}")
+                    elif message['sender'] == 'doctor':
+                        if 'photo' in message:
+                            with open(message['photo'], 'rb') as photo_file:
+                                bot.send_photo(call.message.chat.id, photo=photo_file, caption=f"Врач: {message['text']}")
+                        elif 'video' in message:
+                            with open(message['video'], 'rb') as video_file:
+                                bot.send_video(call.message.chat.id, video=video_file, caption=f"Врач: {message['text']}")
+                        elif 'voice' in message:
+                            with open(message['voice'], 'rb') as voice_file:
+                                bot.send_voice(call.message.chat.id, voice=voice_file, caption=f"Врач: {message['text']}")
+                        else:   
+                            bot.send_message(call.message.chat.id, f"Врач: {message['text']}")
+            else:
+                bot.send_message(call.message.chat.id, "Сообщения не найдены.")
         else:
             bot.send_message(call.message.chat.id, "Чат не найден.")
 
