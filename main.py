@@ -39,10 +39,15 @@ def start(message):
         profile_pat(message, call=message)
     else:
         marcup = types.InlineKeyboardMarkup(row_width=2)
-        doc = types.InlineKeyboardButton(text="Доктор", callback_data="doctor")
-        pat = types.InlineKeyboardButton(text="Пациент", callback_data="patient")
+        doc = types.InlineKeyboardButton(text="👨‍⚕️ Я доктор", callback_data="doctor")
+        pat = types.InlineKeyboardButton(text="🧑‍💼 Я пациент", callback_data="patient")
         marcup.add(doc, pat)
-        bot.send_message(message.chat.id, "Выберите роль:", reply_markup=marcup)
+        bot.send_message(message.chat.id, "👋 Добро пожаловать в сервис онлайн-консультаций!\n\n"
+        "Здесь вы можете:\n"
+        "— Найти врача по специальности\n"
+        "— Получить консультацию\n"
+        "— Общаться в чате и обмениваться файлами\n\n"
+        "Пожалуйста, выберите вашу роль:", reply_markup=marcup)
     cursor.execute('''SELECT * FROM patients''')
     patients = cursor.fetchall()
     print('patients', patients)
@@ -51,27 +56,25 @@ def start(message):
 user_data = {}
 def doc_reg(message, user_id):
     user_data[user_id] = {}
-    bot.send_message(message.chat.id, "Введите ваше имя:")
+    bot.send_message(message.chat.id, "Пожалуйста, введите ваше имя. Это поможет пациентам узнать вас.")
     bot.register_next_step_handler(message, get_doc_name)
 
 def get_doc_name(message):
     user_data[message.from_user.id]['name'] = message.text
-    bot.send_message(message.chat.id, "Введите номер телефона:")
+    bot.send_message(message.chat.id, "📞 Теперь введите ваш номер телефона:")
     bot.register_next_step_handler(message, get_doc_phone)
 def get_doc_phone(message):
     user_data[message.from_user.id]['phone'] = message.text
-    bot.send_message(message.chat.id, "Введите email:")
+    bot.send_message(message.chat.id, "✉️ Пожалуйста, введите ваш email.")
     bot.register_next_step_handler(message, get_doc_email)
 def get_doc_email(message):
     user_data[message.from_user.id]['email'] = message.text
-    bot.send_message(message.chat.id, "Доктор успешно зарегистрирован!\n"
-                     "Имя: {}\n"
-                     "Телефон: {}\n"
-                     "Email: {}".format(
-        user_data[message.from_user.id]['name'],
-        user_data[message.from_user.id]['phone'],
-        user_data[message.from_user.id]['email']
-    ))
+    bot.send_message(message.chat.id, f"🎉 Доктор успешно зарегистрирован!\n\n"
+        f"👤 Имя: {user_data[message.from_user.id]['name']}\n"
+        f"📞 Телефон: {user_data[message.from_user.id]['phone']}\n"
+        f"✉️ Email: {user_data[message.from_user.id]['email']}\n\n"
+        "✅ Следующий шаг — подтвердите документы для работы на платформе."
+    )
     conn, cursor = connect_db()
     cursor.execute('''INSERT INTO doctors (user_id, name, phone, email) VALUES (?, ?, ?, ?)''', (
         message.from_user.id,
@@ -80,37 +83,37 @@ def get_doc_email(message):
         user_data[message.from_user.id]['email']
     ))
     conn.commit()
-    bot.send_message(message.chat.id, """
-📂 Для работы на платформе необходимо подтвердить документы.  
-📷 Прикрепите фото документов, чтобы пройти проверку.  
-👨‍⚕️ После успешной проверки вы получите бейдж «✅ Подтверждён».  
-""")
+    bot.send_message(message.chat.id, 
+"📂 Для работы на платформе необходимо подтвердить документы.\n"
+"Пожалуйста, прикрепите фото документов (например, диплома или сертификата).\n"
+"👨‍⚕️ После успешной проверки вы получите бейдж «✅ Подтверждён» и сможете принимать пациентов."  
+)
     print(user_data)
     print(cursor.execute('''SELECT * FROM doctors WHERE user_id = ?''', (message.from_user.id,)).fetchall())
     profile_doc(message, call=message)
 
 def pat_reg(message, call):
-    bot.send_message(message.chat.id, "Введите ваше имя:")
+    bot.send_message(message.chat.id, "🧑‍💼 Давайте зарегистрируем вас как пациента!\n\n"
+        "Пожалуйста, введите ваше имя. Это поможет врачу обращаться к вам лично.")
     bot.register_next_step_handler(message, get_pat_name)
 def get_pat_name(message):
     user_data[message.from_user.id] = {}
     user_data[message.from_user.id]['name'] = message.text
-    bot.send_message(message.chat.id, "Введите номер телефона:")
+    bot.send_message(message.chat.id, "📞 Теперь введите ваш номер телефона.\n\n"
+        "❗️ Мы не будем показывать его другим пользователям без вашего согласия.")
     bot.register_next_step_handler(message, get_pat_phone)
 def get_pat_phone(message):
     user_data[message.from_user.id]['phone'] = message.text
-    bot.send_message(message.chat.id, "Введите email:")
+    bot.send_message(message.chat.id, "✉️ Пожалуйста, введите ваш email.")
     bot.register_next_step_handler(message, get_pat_email)
 def get_pat_email(message):
     user_data[message.from_user.id]['email'] = message.text
-    bot.send_message(message.chat.id, "Пациент успешно зарегистрирован!\n"
-                     "Имя: {}\n"
-                     "Телефон: {}\n"
-                     "Email: {}".format(
-        user_data[message.from_user.id]['name'],
-        user_data[message.from_user.id]['phone'],
-        user_data[message.from_user.id]['email']
-    ))
+    bot.send_message(message.chat.id,  f"🎉 Регистрация завершена!\n\n"
+        f"👤 Имя: {user_data[message.from_user.id]['name']}\n"
+        f"📞 Телефон: {user_data[message.from_user.id]['phone']}\n"
+        f"✉️ Email: {user_data[message.from_user.id]['email']}\n\n"
+        "✅ Теперь вы можете выбрать врача и начать консультацию!"
+    )
     con, cursor = connect_db()
     cursor.execute('''INSERT INTO patients (user_id, name, phone, email) VALUES (?, ?, ?, ?)''', (
         message.from_user.id,
@@ -128,100 +131,150 @@ def profile_doc(message, call):
         id = message.from_user.id
     conn, cursor = connect_db()
     cursor.execute('''SELECT verification_status, balance FROM doctors WHERE user_id = ?''', (id,))
+    status_balance = cursor.fetchone()
+    if not status_balance:
+        bot.send_message(id, "Профиль не найден.")
+        return
+    status, balance = status_balance
+
+    # Кнопки профиля
     marcup = types.InlineKeyboardMarkup(row_width=2)
-    doc = types.InlineKeyboardButton(text="Пройти вертификацию", callback_data="doc_verification")
-    specif = types.InlineKeyboardButton(text="Выбрать специальность", callback_data="doc_spec")
-    chats = types.InlineKeyboardButton(text="Чаты", callback_data="doc_chats")
-    edit = types.InlineKeyboardButton(text="Редактировать профиль", callback_data="edit_profile")
-    status = cursor.fetchone()[0]
-    print(status)
+    doc = types.InlineKeyboardButton(text="📑 Пройти верификацию", callback_data="doc_verification")
+    specif = types.InlineKeyboardButton(text="🩺 Выбрать специальность", callback_data="doc_spec")
+    chats = types.InlineKeyboardButton(text="💬 Чаты", callback_data="doc_chats")
+    edit = types.InlineKeyboardButton(text="✏️ Редактировать профиль", callback_data="edit_profile")
+
     if status == 'pending':
         marcup.add(doc, specif, edit)
     elif status == 'verified':
         marcup.add(specif, chats, edit)
-    
+    elif status == 'rejected':
+        marcup.add(doc, edit)
+
     cursor.execute('''SELECT * FROM doctors WHERE user_id = ?''', (id,))
     doctor = cursor.fetchone()
     cursor.execute('''SELECT name_ru FROM specialisation WHERE user_id = ?''', (id,))
     specialization = cursor.fetchall()
-    # Преобразуем список кортежей в список строк
     specialization = [spec[0] for spec in specialization]
-    print(specialization)
-    
-    # Преобразуем список строк в строку с разделителем
-    specialization = ', '.join(specialization)
-    if doctor:
-        bot.send_message(id, text="Ваш профиль:\n"
-                         "Имя: {}\n"
-                         "Телефон: {}\n"
-                         "Email: {}\n"
-                         "Статус: {}\n"
-                         "Баланс: {}\n"
-                         "Специализации {}".format(
-            doctor[2], doctor[4], doctor[5], '✅Подтверждён' if doctor[8] == 'verified' else '❌ Не подтверждён', doctor[10], specialization),
-                          reply_markup=marcup)
+    specialization_str = ', '.join(specialization) if specialization else "Не выбраны"
+
+    # Статус верификации
+    if doctor[8] == 'pending':
+        verif_text = "⏳ На данный момент вы находитесь в процессе верификации. Пожалуйста, дождитесь подтверждения."
+    elif doctor[8] == 'verified':
+        verif_text = "✅ Ваш профиль подтверждён. Вы можете принимать пациентов!"
+    elif doctor[8] == 'rejected':
+        verif_text = "❌ Верификация не пройдена. Пожалуйста, проверьте документы и попробуйте снова."
     else:
-        bot.send_message(id, "Профиль не найден.")
+        verif_text = "Статус верификации неизвестен."
+
+    # Формируем красивый профиль
+    profile_text = (
+        "👨‍⚕️ *Ваш профиль врача*\n\n"
+        f"👤 Имя: {doctor[2]}\n"
+        f"📞 Телефон: {doctor[4]}\n"
+        f"✉️ Email: {doctor[5]}\n"
+        f"💼 Статус: {verif_text}\n"
+        f"💰 Баланс: {doctor[10]} руб.\n"
+        f"🩺 Специализации: {specialization_str}\n"
+    )
+
+    bot.send_message(id, text=profile_text, reply_markup=marcup, parse_mode="Markdown")
 
 #верификация
 
 def doc_verification(message, call):
-    bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text="Отправьте фото документов для верификации.")
+    bot.edit_message_text(
+        chat_id=call.message.chat.id,
+        message_id=call.message.message_id,
+        text=(
+            "📂 Для подтверждения профиля, пожалуйста, отправьте фото ваших документов (например, диплома или сертификата).\n\n"
+            "❗️ Документы нужны для проверки вашей квалификации. Мы не передаём их третьим лицам.\n"
+            "После успешной проверки вы получите бейдж «✅ Подтверждён» и сможете принимать пациентов."
+        )
+    )
     bot.register_next_step_handler(message, get_doc_verification)
+
 def get_doc_verification(message):
-    marcup = types.InlineKeyboardMarkup(row_width=2)
-    ver_accept = types.InlineKeyboardButton(text="Принять", callback_data="accept_{}".format(message.from_user.id))
-    ver_decline = types.InlineKeyboardButton(text="Отклонить", callback_data="decline")
-    marcup.add(ver_accept, ver_decline)
     if message.content_type == 'photo':
         file_info = bot.get_file(message.photo[-1].file_id)
         downloaded_file = bot.download_file(file_info.file_path)
-        src = 'verification_docs/' + str(message.from_user.id) + '.jpg'
+        src = f'verification_docs/{message.from_user.id}.jpg'
         with open(src, 'wb') as new_file:
             new_file.write(downloaded_file)
         conn, cursor = connect_db()
-        cursor.execute('''UPDATE doctors SET verification_status = ? WHERE user_id = ?''', ('pending', message.from_user.id))
-        cursor.execute('''UPDATE doctors SET verification_docs = ? WHERE user_id = ?''', (src, message.from_user.id))
+        cursor.execute(
+            '''UPDATE doctors SET verification_status = ?, verification_docs = ? WHERE user_id = ?''',
+            ('pending', src, message.from_user.id)
+        )
         conn.commit()
-        bot.send_message(message.chat.id, text="Документы отправлены на проверку.")
-        bot.send_message(ADMIN_ID, f"Новый запрос на верификацию {message.from_user.id}.", reply_markup=marcup)
-    #else:
-       # bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text="Пожалуйста, отправьте фото документов.")
-
+        bot.send_message(
+            message.chat.id,
+            "✅ Документы успешно отправлены на проверку!\n\n"
+            "⏳ Обычно проверка занимает не более 24 часов. "
+            "Мы уведомим вас, когда профиль будет подтверждён или если потребуется повторная загрузка документов."
+        )
+        bot.send_message(
+            ADMIN_ID,
+            f"🆕 Новый запрос на верификацию от пользователя {message.from_user.id}."
+        )
+    else:
+        bot.send_message(
+            message.chat.id,
+            "❗️ Пожалуйста, отправьте именно фото документов. Попробуйте ещё раз."
+        )
+        bot.register_next_step_handler(message, get_doc_verification)
 
 def get_doc_spec(message, call):
     conn, cursor = connect_db()
     cursor.execute('''SELECT name FROM specialisation WHERE user_id = ?''', (call.from_user.id,))
     specialization = cursor.fetchall()
-    print(specialization)
     specialization = [spec[0] for spec in specialization]
-    print(specialization)
-    marcup = types.InlineKeyboardMarkup(row_width=3)
-    spec1 = types.InlineKeyboardButton(text="✅ Терапевт" if "therapist" in specialization else "Терапевт", callback_data="therapist")
-    spec2 = types.InlineKeyboardButton(text="✅ Семейный врач" if "family" in specialization else "Семейный врач", callback_data="family")
-    spec3 = types.InlineKeyboardButton(text="✅ Педиатр" if "pediatrician" in specialization else "Педиатр", callback_data="pediatrician")
-    spec4 = types.InlineKeyboardButton(text="✅ Кардиолог" if "cardiologist" in specialization else "Кардиолог", callback_data="cardiologist")
-    spec5 = types.InlineKeyboardButton(text="✅ Гастроэнтеролог" if "gastroenterologist" in specialization else "Гастроэнтеролог", callback_data="gastroenterologist")
-    spec6 = types.InlineKeyboardButton(text="✅ Эндокринолог" if "endocrinologist" in specialization else "Эндокринолог", callback_data="endocrinologist")
-    spec7 = types.InlineKeyboardButton(text="✅ Невролог" if "neurologist" in specialization else "Невролог", callback_data="neurologist")
-    spec8 = types.InlineKeyboardButton(text="✅ Аллерголог-иммунолог" if "allergist_immunologist" in specialization else "Аллерголог-иммунолог", callback_data="allergist_immunologist")
-    spec9 = types.InlineKeyboardButton(text="✅ Дерматолог" if "dermatologist" in specialization else "Дерматолог", callback_data="dermatologist")
-    spec10 = types.InlineKeyboardButton(text="✅ Психотерапевт" if "psychotherapist" in specialization else "Психотерапевт", callback_data="psychotherapist")
-    spec11 = types.InlineKeyboardButton(text="✅ Гинеколог" if "gynecologist" in specialization else "Гинеколог", callback_data="gynecologist")
-    spec12 = types.InlineKeyboardButton(text="✅ Офтальмолог" if "ophthalmologist" in specialization else "Офтальмолог", callback_data="ophthalmologist")
-    spec13 = types.InlineKeyboardButton(text="✅ Стоматолог" if "dentist" in specialization else "Стоматолог", callback_data="dentist")
-    spec14 = types.InlineKeyboardButton(text="✅ Психиатр" if "psychiatrist" in specialization else "Психиатр", callback_data="psychiatrist")
+
+    marcup = types.InlineKeyboardMarkup(row_width=3)  # <-- row_width=3 для трёх столбцов
+    spec_buttons = [
+        ("therapist", "Терапевт"),
+        ("family", "Семейный врач"),
+        ("pediatrician", "Педиатр"),
+        ("cardiologist", "Кардиолог"),
+        ("gastroenterologist", "Гастроэнтеролог"),
+        ("endocrinologist", "Эндокринолог"),
+        ("neurologist", "Невролог"),
+        ("allergist_immunologist", "Аллерголог-иммунолог"),
+        ("dermatologist", "Дерматолог"),
+        ("psychotherapist", "Психотерапевт"),
+        ("gynecologist", "Гинеколог"),
+        ("ophthalmologist", "Офтальмолог"),
+        ("dentist", "Стоматолог"),
+        ("psychiatrist", "Психиатр"),
+    ]
+    # Группируем кнопки по 3 в ряд
+    row = []
+    for code, label in spec_buttons:
+        text = f"✅ {label}" if code in specialization else label
+        row.append(types.InlineKeyboardButton(text=text, callback_data=code))
+        if len(row) == 3:
+            marcup.add(*row)
+            row = []
+    if row:
+        marcup.add(*row)
     done = types.InlineKeyboardButton(text="Готово", callback_data="done")
-    marcup.add(spec1, spec2, spec3, spec4, spec5, spec6, spec7, spec8, spec9, spec10, spec11, spec12, spec13, spec14, done)
-    
-    # Проверяем, изменилось ли сообщение
-    current_text = "Выберите специальность:"
-    current_markup = call.message.reply_markup
+    marcup.add(done)
 
-    # Преобразуем разметку в строку для сравнения
-    if current_text != call.message.text or str(current_markup) != str(marcup.to_dict()):
-        bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text=current_text, reply_markup=marcup)
+    help_text = (
+        "🩺 *Выберите ваши специализации*\n\n"
+        "Выберите одну или несколько специализаций, по которым вы готовы консультировать пациентов. "
+        "Нажмите на нужные направления — выбранные будут отмечены галочкой.\n\n"
+        "Когда закончите, нажмите «Готово»."
+    )
 
+    bot.edit_message_text(
+        chat_id=call.message.chat.id,
+        message_id=call.message.message_id,
+        text=help_text,
+        reply_markup=marcup,
+        parse_mode="Markdown"
+    )
 
 def get_price(message, call):
     conn, cursor = connect_db()
@@ -269,75 +322,137 @@ def get_price(message, call):
     bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text=f"Вы выбрали {specialization}", reply_markup=None)
     get_price_value(message=message)
 def get_price_value(message):
-    bot.send_message(message.chat.id, "Введите стоимость консультации для каждого направления через запятую (например: 1000,2000,3000):")
+    bot.send_message(
+        message.chat.id,
+        "💰 Введите стоимость консультации для каждого выбранного направления через запятую.\n\n"
+        "Например: 1000,2000,3000\n"
+        "Порядок цен должен соответствовать порядку выбранных специализаций."
+    )
     bot.register_next_step_handler(message, get_price_value_2)
+
 def get_price_value_2(message):
     prices = message.text.split(',')
     conn, cursor = connect_db()
     cursor.execute('''SELECT name FROM specialisation WHERE user_id = ?''', (message.from_user.id,))
     specialization = cursor.fetchall()
     specialization = [spec[0] for spec in specialization]
-    print(specialization)
     try:
         for i in range(len(specialization)):
-            cursor.execute('''UPDATE specialisation SET price = ? WHERE user_id = ? AND name = ?''', (prices[i], message.from_user.id, specialization[i]))
+            cursor.execute(
+                '''UPDATE specialisation SET price = ? WHERE user_id = ? AND name = ?''',
+                (prices[i], message.from_user.id, specialization[i])
+            )
             conn.commit()
-        bot.send_message(message.chat.id, "Стоимость успешно обновлена.")
+        bot.send_message(
+            message.chat.id,
+            "✅ Стоимость успешно обновлена для всех направлений!\n\n"
+            "Теперь ваш профиль полностью готов к приёму пациентов."
+        )
         pr = cursor.execute('''SELECT name, price FROM specialisation WHERE user_id = ?''', (message.from_user.id,)).fetchall()
         print(pr)
         profile_doc(message, call=message)
     except IndexError:
-        bot.send_message(message.chat.id, "Ошибка: количество цен не соответствует количеству направлений. Пожалуйста, попробуйте снова.")
+        bot.send_message(
+            message.chat.id,
+            "❗️ Ошибка: количество цен не соответствует количеству выбранных направлений.\n"
+            "Пожалуйста, попробуйте снова и убедитесь, что ввели цену для каждого направления."
+        )
         get_price_value(message)
     
 
 def edit_profile(message, call):
     marcup = types.InlineKeyboardMarkup(row_width=2)
-    name = types.InlineKeyboardButton(text="Изменить имя", callback_data="name")
-    phone = types.InlineKeyboardButton(text="Изменить номер телефона", callback_data="phone")
-    email = types.InlineKeyboardButton(text="Изменить email", callback_data="email")
-    discription = types.InlineKeyboardButton(text="Изм.\доб. описание", callback_data="description")
-    marcup.add(name, phone, email, discription)
-    bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text="Выберите действие:", reply_markup=marcup)
+    name = types.InlineKeyboardButton(text="📝 Изменить имя", callback_data="name")
+    phone = types.InlineKeyboardButton(text="📞 Изменить номер телефона", callback_data="phone")
+    email = types.InlineKeyboardButton(text="✉️ Изменить email", callback_data="email")
+    discription = types.InlineKeyboardButton(text="ℹ️ Изм./добавить описание", callback_data="description")
+    marcup.add(name, phone)
+    marcup.add(email, discription)
+    bot.edit_message_text(
+        chat_id=call.message.chat.id,
+        message_id=call.message.message_id,
+        text=(
+            "🔧 *Редактирование профиля*\n\n"
+            "Выберите, что вы хотите изменить. После внесения изменений вы сразу увидите обновлённый профиль."
+        ),
+        reply_markup=marcup,
+        parse_mode="Markdown"
+    )
 
 @bot.callback_query_handler(func=lambda call: call.data in ["name", "phone", "email", "description"])
 def edit_profile1(call):
     bot.answer_callback_query(call.id)
     if call.data == "name":
-        bot.send_message(call.message.chat.id, "Введите новое имя:")
+        bot.send_message(
+            call.message.chat.id,
+            "✏️ Введите новое имя.\n\n"
+            "Пожалуйста, укажите, как вы хотите, чтобы вас видели пациенты."
+        )
         bot.register_next_step_handler(call.message, get_new_name)
     elif call.data == "phone":
-        bot.send_message(call.message.chat.id, "Введите новый номер телефона:")
+        bot.send_message(
+            call.message.chat.id,
+            "📞 Введите новый номер телефона.\n\n"
+            "Убедитесь, что номер актуален — на него могут приходить важные уведомления."
+        )
         bot.register_next_step_handler(call.message, get_new_phone)
     elif call.data == "email":
-        bot.send_message(call.message.chat.id, "Введите новый email:")
+        bot.send_message(
+            call.message.chat.id,
+            "✉️ Введите новый email.\n\n"
+            "Проверьте правильность адреса."
+        )
         bot.register_next_step_handler(call.message, get_new_email)
     elif call.data == "description":
-        bot.send_message(call.message.chat.id, "Введите новое описание:")
+        bot.send_message(
+            call.message.chat.id,
+            "ℹ️ Введите новое описание.\n\n"
+            "Расскажите о себе, опыте и подходе к работе — это поможет пациентам выбрать именно вас."
+        )
         bot.register_next_step_handler(call.message, get_new_description)
+
 def get_new_name(message):
     conn, cursor = connect_db()
     cursor.execute('''UPDATE doctors SET name = ? WHERE user_id = ?''', (message.text, message.from_user.id))
     conn.commit()
-    bot.send_message(message.chat.id, "Имя успешно изменено.")
+    bot.send_message(
+        message.chat.id,
+        "✅ Имя успешно изменено!\n\n"
+        "Ваш профиль обновлён."
+    )
     profile_doc(message)
+
 def get_new_phone(message):
     conn, cursor = connect_db()
     cursor.execute('''UPDATE doctors SET phone = ? WHERE user_id = ?''', (message.text, message.from_user.id))
     conn.commit()
-    bot.send_message(message.chat.id, "Номер телефона успешно изменён.")
+    bot.send_message(
+        message.chat.id,
+        "✅ Номер телефона успешно изменён!\n\n"
+        "Ваш профиль обновлён."
+    )
     profile_doc(message)
+
 def get_new_email(message):
     conn, cursor = connect_db()
     cursor.execute('''UPDATE doctors SET email = ? WHERE user_id = ?''', (message.text, message.from_user.id))
     conn.commit()
-    bot.send_message(message.chat.id, "Email успешно изменён.")
+    bot.send_message(
+        message.chat.id,
+        "✅ Email успешно изменён!\n\n"
+        "Ваш профиль обновлён."
+    )
     profile_doc(message)
+
 def get_new_description(message):
     conn, cursor = connect_db()
     cursor.execute('''UPDATE doctors SET description = ? WHERE user_id = ?''', (message.text, message.from_user.id))
     conn.commit()
-    bot.send_message(message.chat.id, "Описание успешно изменено.")
+    bot.send_message(
+        message.chat.id,
+        "✅ Описание успешно изменено!\n\n"
+        "Ваш профиль обновлён."
+    )
     profile_doc(message)
 
 def profile_pat(message, call):
@@ -346,19 +461,21 @@ def profile_pat(message, call):
     except AttributeError:
         id = message.from_user.id
     marcup = types.InlineKeyboardMarkup(row_width=2)
-    doc = types.InlineKeyboardButton(text="Записаться к врачу", callback_data="doc_reg")
-    chats = types.InlineKeyboardButton(text="Чаты", callback_data="pat_chats")
+    doc = types.InlineKeyboardButton(text="👨‍⚕️ Записаться к врачу", callback_data="doc_reg")
+    chats = types.InlineKeyboardButton(text="💬 Чаты", callback_data="pat_chats")
     marcup.add(doc, chats)
     conn, cursor = connect_db()
     cursor.execute('''SELECT * FROM patients WHERE user_id = ?''', (id,))
     patient = cursor.fetchone()
     if patient:
-        bot.send_message(id, text="Ваш профиль:\n"
-                         "Имя: {}\n"
-                         "Телефон: {}\n"
-                         "Email: {}".format(
-            patient[2], patient[4], patient[5]),
-        reply_markup=marcup)
+        profile_text = (
+            "🧑‍💼 *Ваш профиль пациента*\n\n"
+            f"👤 Имя: {patient[2]}\n"
+            f"📞 Телефон: {patient[4]}\n"
+            f"✉️ Email: {patient[5]}\n\n"
+            "Выберите действие:"
+        )
+        bot.send_message(id, text=profile_text, reply_markup=marcup, parse_mode="Markdown")
 
 def doc_list(message, call):
     marcup = types.InlineKeyboardMarkup(row_width=3)
@@ -377,7 +494,18 @@ def doc_list(message, call):
     spec13 = types.InlineKeyboardButton(text="Стоматолог", callback_data="dentist_doc")
     spec14 = types.InlineKeyboardButton(text="Психиатр", callback_data="psychiatrist_doc")
     marcup.add(spec1, spec2, spec3, spec4, spec5, spec6, spec7, spec8, spec9, spec10, spec11, spec12, spec13, spec14)
-    bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text="Выберите напровление:", reply_markup=marcup)
+    bot.edit_message_text(
+    chat_id=call.message.chat.id,
+    message_id=call.message.message_id,
+    text=(
+        "🩺 *Выберите направление*\n\n"
+        "Пожалуйста, выберите специальность врача, к которому хотите записаться. "
+        "Вы можете посмотреть подробную информацию о каждом специалисте после выбора.\n\n"
+        "Нажмите на нужное направление:"
+    ),
+    reply_markup=marcup,
+    parse_mode="Markdown"
+)
 
 def get_doc(message, call, filters, flag, msg, id):
     doctor = []
@@ -413,91 +541,112 @@ def get_doc(message, call, filters, flag, msg, id):
 def doctors(message, call, doctor):
     conn, cursor = connect_db()
     if len(doctor) == 0:
-        bot.send_message(message.chat.id, "Врачи не найдены.")
+        bot.send_message(message.chat.id, "❗️ Врачи по выбранному направлению не найдены.\n\nПопробуйте выбрать другую специальность или вернитесь в меню.")
     else:
         marcup = types.InlineKeyboardMarkup(row_width=3)
-        sort1 = types.InlineKeyboardButton(text="По рейтингу", callback_data="sort1")
-        sort2 = types.InlineKeyboardButton(text="По цене", callback_data="sort2")
-        sort3 = types.InlineKeyboardButton(text="По опыту", callback_data="sort3")
-        back = types.InlineKeyboardButton(text="Назад", callback_data="doc_reg")
-        marcup.add(sort1, sort2, sort3, back)
-        #создаем текст для отправки
-        text = "Врачи:\n"
-        t = 1
-        for doc in doctor:
-            text += f"{t}. Имя: {doc[2]}\nСтаж: {doc[11]}\nРейтинг: {doc[10]}\n\n"
-            t += 1
-        bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text=text, reply_markup=marcup)
-            
+        sort1 = types.InlineKeyboardButton(text="⭐️ По рейтингу", callback_data="sort1")
+        sort2 = types.InlineKeyboardButton(text="💰 По цене", callback_data="sort2")
+        sort3 = types.InlineKeyboardButton(text="🎓 По опыту", callback_data="sort3")
+        back = types.InlineKeyboardButton(text="⬅️ Назад", callback_data="doc_reg")
+        marcup.add(sort1, sort2, sort3)
+        marcup.add(back)
+        # Создаем красивый текст для отправки
+        text = "👨‍⚕️ *Список врачей*\n\n"
+        for idx, doc in enumerate(doctor, 1):
+            text += (
+                f"*{idx}. {doc[2]}*\n"
+                f"— 🏅 Рейтинг: {doc[10]}\n"
+                f"— 🎓 Стаж: {doc[11]} лет\n"
+                f"— 💬 Подробнее: выберите врача для просмотра профиля\n\n"
+            )
+        bot.edit_message_text(
+            chat_id=call.message.chat.id,
+            message_id=call.message.message_id,
+            text=text,
+            reply_markup=marcup,
+            parse_mode="Markdown"
+        )
 
 
 def doc_card(message, call, doctor, msg):
     msg = int(msg) - 1
-    print(doctor[msg])
-    doctors = doctor[msg][3]
-    print('doc', doctors)  
     conn, cursor = connect_db()
-    cursor.execute('''SELECT * FROM specialisation WHERE user_id = ?''', (doctor[msg][1],))
-    specialization = cursor.fetchall()
-    print('spec', specialization)
-    specialization_coun = int(len(specialization))
-    print('spec1', specialization_coun)
+    doc_info = doctor[msg]
+    cursor.execute('''SELECT * FROM specialisation WHERE user_id = ?''', (doc_info[1],))
+    specializations = cursor.fetchall()
     marcup = types.InlineKeyboardMarkup(row_width=2)
-    back = types.InlineKeyboardButton(text="Назад", callback_data="doc_reg")
-    consult = types.InlineKeyboardButton(text="Записаться на консультацию", callback_data="consult_{}".format(doctor[msg][1]))
+    back = types.InlineKeyboardButton(text="⬅️ Назад", callback_data="doc_reg")
+    consult = types.InlineKeyboardButton(text="📝 Записаться на консультацию", callback_data=f"consult_{doc_info[1]}")
     marcup.add(consult, back)
-    if doctors != None:
-        print(doctor[msg][3])
-        with open(doctor[msg][3], 'rb') as photo:
-            bot.send_photo(message.chat.id, photo, caption=f"Имя: {doctor[msg][2]}\n"
-                                                           f"Специальность: {doctor[msg][7]}\n"
-                                                           f"Стаж: {doctor[msg][11]}\n"
-                                                           f"Рейтинг: {doctor[msg][10]}\n"
-                                                           f"Цена: {specialization[0][4]}\n")
+
+    # Формируем красивую карточку
+    spec_text = ""
+    for spec in specializations:
+        spec_text += f"🩺 {spec[3]}\n💰 Цена: {spec[4]} руб.\n\n"
+
+    card_text = (
+        f"👨‍⚕️ *Профиль врача*\n\n"
+        f"👤 Имя: {doc_info[2]}\n"
+        f"🎓 Стаж: {doc_info[11]} лет\n"
+        f"🏅 Рейтинг: {doc_info[10]}\n"
+        f"{spec_text}"
+        f"ℹ️ Подробнее: выберите «Записаться на консультацию», чтобы отправить заявку врачу."
+    )
+
+    # Если есть фото — отправляем с фото, иначе просто текст
+    if doc_info[3]:
+        try:
+            with open(doc_info[3], 'rb') as photo:
+                bot.send_photo(message.chat.id, photo, caption=card_text, reply_markup=marcup, parse_mode="Markdown")
+        except Exception as e:
+            print(f"Ошибка открытия фото: {e}")
+            bot.send_message(message.chat.id, text=card_text, reply_markup=marcup, parse_mode="Markdown")
     else:
-        text=f"Имя: {doctor[msg][2]}\n"f"Стаж: {doctor[msg][11]}\n"f"Рейтинг: {doctor[msg][10]}\n"
-        for specialization in specialization:
-            text += f"Специальность: {specialization[3]}\n"
-            text += f"Цена: {specialization[4]}\n\n"
-            
-        bot.send_message(message.chat.id, text=text, reply_markup=marcup)
+        bot.send_message(message.chat.id, text=card_text, reply_markup=marcup, parse_mode="Markdown")
     
 
 def get_consultation_date(message):
     id_consult = random.randint(100000, 999999)
     marcup = types.InlineKeyboardMarkup(row_width=2)
-    approve = types.InlineKeyboardButton(text="Подтвердить", callback_data=f"approve{id_consult}")
-    cancel = types.InlineKeyboardButton(text="Отменить", callback_data=f"cancel{id_consult}")
+    approve = types.InlineKeyboardButton(text="✅ Подтвердить", callback_data=f"approve{id_consult}")
+    cancel = types.InlineKeyboardButton(text="❌ Отменить", callback_data=f"cancel{id_consult}")
     marcup.add(approve, cancel)
     conn, cursor = connect_db()
     cursor.execute('''SELECT data FROM temporary_data WHERE user_id = ?''', (message.from_user.id,))
     doctor_id = cursor.fetchone()
-    print(doctor_id)
     if doctor_id:
         doctor_id = doctor_id[0]
         cursor.execute('''SELECT * FROM doctors WHERE user_id = ?''', (doctor_id,))
         doctor = cursor.fetchone()
-        print(doctor)
         if doctor:
-            
-            bot.send_message(message.chat.id, f"Вы записаны на консультацию к врачу {doctor[2]}.\n"
-                                               f"Ваше сообщение: {message.text}")
-            bot.send_message(doctor_id, f"Пациент {message.from_user.id} записался на консультацию.\n"
-                                         f"Сообщение: {message.text}", reply_markup=marcup)
-            # Здесь можно добавить логику для записи на консультацию
+            bot.send_message(
+                message.chat.id,
+                f"📝 Вы записаны на консультацию к врачу *{doctor[2]}*.\n"
+                f"Ваше сообщение: {message.text}\n\n"
+                "Пожалуйста, дождитесь подтверждения от врача. "
+                "Если вы ошиблись — нажмите «Отменить»."
+            )
+            bot.send_message(
+                doctor_id,
+                f"👨‍⚕️ Новый запрос на консультацию!\n"
+                f"Пациент: {message.from_user.id}\n"
+                f"Сообщение: {message.text}\n\n"
+                "Пожалуйста, подтвердите или отклоните заявку.",
+                reply_markup=marcup
+            )
             total_price = cursor.execute('''SELECT price FROM specialisation WHERE user_id = ?''', (doctor_id,)).fetchone()
             total_price = total_price[0]
-            print('price', total_price)
-            print('id', message.from_user.id)
-                                                                                                                                       ### не забыть поменять \/\/\/\/\/ ###
-            cursor.execute('''INSERT INTO consultations (identifier, doctor_id, patient_id, description, total_price) VALUES (?, ?, ?, ?, ?)''', (id_consult, doctor_id, message.from_user.id, message.text, total_price))
+            cursor.execute(
+                '''INSERT INTO consultations (identifier, doctor_id, patient_id, description, total_price) VALUES (?, ?, ?, ?, ?)''',
+                (id_consult, doctor_id, message.from_user.id, message.text, total_price)
+            )
             conn.commit()
             cursor.execute('''DELETE FROM temporary_data WHERE user_id = ?''', (message.from_user.id,))
             conn.commit()
         else:
-            bot.send_message(message.chat.id, "Врач не найден.")
+            bot.send_message(message.chat.id, "❗️ Врач не найден.")
     else:
-        bot.send_message(message.chat.id, "Ошибка получения данных врача.")
+        bot.send_message(message.chat.id, "❗️ Ошибка получения данных врача.")
 
 
 import requests
@@ -584,7 +733,7 @@ def create_chat(message, call):
         bot.send_message(consultation[3], "Чат создан.")
         # Здесь можно добавить логику для создания чата
     else:
-        bot.send_message(call.message.chat.id, "Ошибка создания чата.")
+        bot.send_message(call.message.id, "❗️ Произошла ошибка. Пожалуйста, попробуйте ещё раз или обратитесь в поддержку.")
 
 def chats(message, call):
     conn, cursor = connect_db()
@@ -612,51 +761,80 @@ def chats(message, call):
     print('chats', chats)
     #выводим список чатов
     if len(chats) == 0:
-        bot.send_message(message.chat.id, "Чаты не найдены.")
+        bot.send_message(message.chat.id, "💬 Чаты не найдены.\n\nВы пока не участвовали в консультациях. После записи к врачу здесь появится ваш чат.")
     else:
-        text = "Чаты:\n"
-        for chat in chats:
-            cursor.execute('''SELECT * FROM consultations WHERE identifier = ?''', (chat[1],))
-            consultation = cursor.fetchone()
-            if consultation:
-                text += f"Консультация: {consultation[1]}\n"
-                text += f"Пациент: {patient[2]}\n"
-                text += f"Врач: {doctor[2]}\n\n"
-        bot.send_message(message.chat.id, text=text, reply_markup=marcup)
-    bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text="Чаты", reply_markup=None)
+        text = "💬 *Ваши чаты*\n\n"
+    for chat in chats:
+        cursor.execute('''SELECT * FROM consultations WHERE identifier = ?''', (chat[1],))
+        consultation = cursor.fetchone()
+        if consultation:
+            text += f"🗂 Консультация: {consultation[1]}\n"
+            text += f"🧑‍💼 Пациент: {patient[2]}\n"
+            text += f"👨‍⚕️ Врач: {doctor[2]}\n\n"
+    try:
+        bot.edit_message_text(
+            chat_id=call.message.chat.id,
+            message_id=call.message.message_id,
+            text=text,
+            reply_markup=marcup,
+            parse_mode="Markdown"
+        )
+    except Exception as e:
+        pass
 
 def start_chat(call, chat_id_end):
     marcup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    text = types.KeyboardButton(text="Отправить сообщение")
-    img = types.KeyboardButton(text="Отправить фото")
-    video = types.KeyboardButton(text="Отправить видео")
-    audio = types.KeyboardButton(text="Отправить аудио-сообщение")
-    end_consult = types.KeyboardButton(text="Завершить консультацию")
-    back = types.KeyboardButton(text="Назад")
+    text = types.KeyboardButton(text="💬 Отправить сообщение")
+    img = types.KeyboardButton(text="🖼 Отправить фото")
+    video = types.KeyboardButton(text="🎥 Отправить видео")
+    audio = types.KeyboardButton(text="🎤 Отправить аудио-сообщение")
+    end_consult = types.KeyboardButton(text="✅ Завершить консультацию")
+    back = types.KeyboardButton(text="⬅️ Назад")
     if chat_id_end:
         marcup.add(text, img, video, audio, end_consult, back)
     else:
-        spor = types.KeyboardButton(text="Оспорить консультацию")
+        spor = types.KeyboardButton(text="⚠️ Оспорить консультацию")
         marcup.add(text, img, video, audio, end_consult, spor, back)
-    bot.send_message(call.message.chat.id, "Выберите действие:", reply_markup=marcup)
+    bot.send_message(
+        call.message.chat.id,
+        "👇 *Выберите действие для общения в чате:*\n\n"
+        "— 💬 Отправить текстовое сообщение\n"
+        "— 🖼 Отправить фото\n"
+        "— 🎥 Отправить видео\n"
+        "— 🎤 Отправить аудио-сообщение\n"
+        "— ✅ Завершить консультацию\n"
+        "— ⚠️ Оспорить консультацию (если есть спорная ситуация)\n"
+        "— ⬅️ Назад — вернуться в главное меню",
+        reply_markup=marcup,
+        parse_mode="Markdown"
+    )
+
+@bot.message_handler(commands=['admin'])
+def admin_panel(message):
+    if message.from_user.id == ADMIN_ID:
+        markup = types.InlineKeyboardMarkup(row_width=2)
+        veri = types.InlineKeyboardButton(text="Заявки на верификацию", callback_data="doc_ver_admin")
+        spor = types.InlineKeyboardButton(text="Заявки на оспаривание", callback_data="dispute_consultation")
+        markup.add(veri, spor)
+        bot.send_message(message.chat.id, "Добро пожаловать в админ-панель!", reply_markup=markup)
 
 @bot.message_handler(content_types=['text', 'photo', 'video', 'audio'])
 def handle_message(message):
-    if message.text == "Отправить сообщение":
+    if message.text == "💬 Отправить сообщение":
         bot.send_message(message.chat.id, "Введите ваше сообщение:")
         bot.register_next_step_handler(message, send_text_message)
-    elif message.text == "Отправить фото":
+    elif message.text == "🖼 Отправить фото":
         bot.send_message(message.chat.id, "Отправьте фото:")
         bot.register_next_step_handler(message, send_photo_message)
-    elif message.text == "Отправить видео":
+    elif message.text == "🎥 Отправить видео":
         bot.send_message(message.chat.id, "Отправьте видео:")
         bot.register_next_step_handler(message, send_video_message)
-    elif message.text == "Отправить аудио-сообщение":
+    elif message.text == "🎤 Отправить аудио-сообщение":
         bot.send_message(message.chat.id, "Отправьте голосовое-собщение:")
         bot.register_next_step_handler(message, send_vocie_message)
-    elif message.text == "Завершить консультацию":
+    elif message.text == "✅ Завершить консультацию":
         pass
-    elif message.text == "Назад":
+    elif message.text == "⬅️ Назад":
         bot.send_message(message.chat.id, "Вы вернулись в главное меню.", reply_markup=types.ReplyKeyboardRemove())
         conn, cursor = connect_db()
         cursor.execute('''SELECT * FROM patients WHERE user_id = ?''', (message.from_user.id,))
@@ -681,7 +859,7 @@ def handle_message(message):
             conn.commit()
             print('doctors', chats[3])
         start(message)
-    elif message.text == "Оспорить консультацию":
+    elif message.text == "⚠️ Оспорить консультацию":
         bot.send_message(message.chat.id, "Введите причину спора:")
         bot.register_next_step_handler(message, dispute_consultation)
     else:
@@ -815,6 +993,7 @@ def send_text_message(message):
         cursor.execute('''UPDATE chats SET messages = ? WHERE consultation_id = ?''', (messages_json, active_chat_id))
         conn.commit()
         print('Сообщение сохранено в базе данных', messages_json)
+        bot.send_message(message.chat.id, "✅ Сообщение отправлено!")
 
     else:
         bot.send_message(message.chat.id, "Чат не найден.")
@@ -951,6 +1130,7 @@ def send_photo_message(message):
         cursor.execute('''UPDATE chats SET messages = ? WHERE consultation_id = ?''', (messages_json, active_chat_id))
         conn.commit()
         print('Сообщение сохранено в базе данных', messages_json)
+        bot.send_message(message.chat.id, "✅ Сообщение отправлено!")
     else:
         bot.send_message(message.chat.id, "Чат не найден.")
 
@@ -1086,7 +1266,7 @@ def send_video_message(message):
         cursor.execute('''UPDATE chats SET messages = ? WHERE consultation_id = ?''', (messages_json, active_chat_id))
         conn.commit()
         print('Сообщение сохранено в базе данных', messages_json)
-        
+        bot.send_message(message.chat.id, "✅ Сообщение отправлено!")
     else:
         bot.send_message(message.chat.id, "Чат не найден.")
 
@@ -1223,8 +1403,42 @@ def send_vocie_message(message):
         cursor.execute('''UPDATE chats SET messages = ? WHERE consultation_id = ?''', (messages_json, active_chat_id))
         conn.commit()
         print('Сообщение сохранено в базе данных', messages_json)
+        bot.send_message(message.chat.id, "✅ Сообщение отправлено!")
     else:
         bot.send_message(message.chat.id, "Чат не найден.")
+
+
+
+def doc_ver_admin(call):
+    conn, cursor = connect_db()
+    cursor.execute('''SELECT * FROM doctors WHERE verification_status = ?''', ('pending',))
+    data = cursor.fetchall()
+    if not data:
+        bot.send_message(call.message.chat.id, "Нет заявок на верификацию.")
+        return
+    for row in data:
+        print('row', row)
+        markup = types.InlineKeyboardMarkup(row_width=2)
+        check = types.InlineKeyboardButton(text=f"Проверить {row[2]}", callback_data=f"check_{row[1]}")
+        markup.add(check)
+        bot.send_message(call.message.chat.id, f"Заявка на верификацию", reply_markup=markup)
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith("check_"))
+def check_doc(call):
+    conn, cursor = connect_db()
+    doc_id = call.data.split("_")[1]
+    cursor.execute('''SELECT * FROM doctors WHERE user_id = ?''', (doc_id,))
+    data = cursor.fetchone()
+    if not data:
+        bot.send_message(call.message.chat.id, "Доктор не найден.")
+        return
+    markup = types.InlineKeyboardMarkup(row_width=2)
+    approve = types.InlineKeyboardButton(text="Одобрить", callback_data=f"accept_{doc_id}")
+    reject = types.InlineKeyboardButton(text="Отклонить", callback_data=f"reject_{doc_id}")
+    markup.add(approve, reject)
+    with open(data[7], 'rb') as photo:
+        bot.send_photo(call.message.chat.id, photo=photo, caption=f"Доктор: {data[2]}", reply_markup=markup)
+    
 
 
 @bot.callback_query_handler(func=lambda call: True)
@@ -1303,7 +1517,12 @@ def callback_query(call):
         conn, cursor = connect_db()
         cursor.execute('''INSERT INTO temporary_data (user_id, data) VALUES (?, ?)''', (call.from_user.id, id))
         conn.commit()
-        bot.send_message(call.message.chat.id, "Опишите свою проблему:")
+        bot.send_message(
+        call.message.chat.id,
+    "📝 Пожалуйста, опишите вашу проблему максимально подробно.\n\n"
+    "Это поможет врачу быстрее разобраться в ситуации и дать более точную консультацию.\n\n"
+    "Например: «Беспокоит боль в горле и температура уже 3 дня...»"
+)
         bot.register_next_step_handler(call.message, get_consultation_date)
     elif call.data.startswith("approve"):
         id_consult = call.data.replace("approve", "")
@@ -1312,8 +1531,16 @@ def callback_query(call):
         consultation = cursor.fetchone()
         if consultation:
             #нужна проверка, логика оплаты.
-            bot.send_message(consultation[3], "Ваша консультация подтверждена.")
-            bot.send_message(consultation[2], "Консультация подтверждена.")
+            bot.send_message(
+        consultation[3],
+    "✅ Ваша консультация подтверждена!\n\n"
+    "Вы можете перейти в чат с пациентом для начала общения."
+)
+            bot.send_message(
+    consultation[2],
+    "✅ Консультация подтверждена врачом!\n\n"
+    "Вы можете перейти в чат для общения с врачом."
+)
             #send_invoice_to_patient(id_consult, call.message.chat.id)
             create_chat(message=call.message, call=call)
         else:
@@ -1324,8 +1551,16 @@ def callback_query(call):
         cursor.execute('''SELECT * FROM consultations WHERE identifier = ?''', (id_consult,))
         consultation = cursor.fetchone()
         if consultation:
-            bot.send_message(consultation[3], "Ваша консультация отменена.")
-            bot.send_message(consultation[2], "Консультация отменена.")
+            bot.send_message(
+                consultation[3],
+                "❌ Ваша консультация была отменена.\n\n"
+                "Если у вас остались вопросы — вы можете выбрать другого врача или попробовать записаться снова."
+)
+            bot.send_message(
+                consultation[2],
+                "❌ Консультация отменена.\n\n"
+                "Если вы хотите, вы можете выбрать другого специалиста для консультации."
+)
         else:
             bot.send_message(call.message.chat.id, "Консультация не найдена.")
     elif call.data.startswith("accept"):
@@ -1334,8 +1569,34 @@ def callback_query(call):
         conn, cursor = connect_db()
         cursor.execute('''UPDATE doctors SET verification_status = ? WHERE user_id = ?''', ('verified', id))
         conn.commit()
-        bot.send_message(id, "Ваша верификация прошла успешно.")
-        bot.send_message(call.message.chat.id, "Верификация принята.")
+        bot.send_message(
+    id,
+    "✅ Поздравляем! Ваша верификация прошла успешно.\n\n"
+    "Теперь вы можете принимать пациентов на платформе и пользоваться всеми возможностями сервиса."
+)
+        bot.send_message(
+    call.message.chat.id,
+    "✅ Верификация одобрена.\n\n"
+    "Доктор получил уведомление и теперь может работать на платформе."
+)
+        
+    elif call.data.startswith("reject"):
+        id = call.data.replace("reject_", "")
+        print('id=', id)
+        conn, cursor = connect_db()
+        cursor.execute('''UPDATE doctors SET verification_status = ? WHERE user_id = ?''', ('rejected', id))
+        conn.commit()
+        bot.send_message(
+    id,
+    "❌ К сожалению, ваша верификация отклонена.\n\n"
+    "Проверьте корректность загруженных документов и попробуйте пройти верификацию снова.\n"
+    "Если возникли вопросы — обратитесь в поддержку."
+)
+        bot.send_message(
+    call.message.chat.id,
+    "❌ Верификация отклонена.\n\n"
+    "Доктор получил уведомление и может повторно отправить документы."
+)
     elif call.data == "doc_chats":
         print('doc_chats')
         chats(message=call.message, call=call)
@@ -1429,6 +1690,8 @@ def callback_query(call):
                 bot.send_message(call.message.chat.id, "Сообщения не найдены.")
         else:
             bot.send_message(call.message.chat.id, "Чат не найден.")
+    elif call.data == 'doc_ver_admin':
+        doc_ver_admin(call)
 
 
 
