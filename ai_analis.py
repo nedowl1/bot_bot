@@ -42,14 +42,14 @@ def analyze_chat_by_id(chat_id):
         prompt += f"{role}: {msg.get('text', '')}\n"
     prompt += "\nОтвет в формате: Оценка: X. Комментарий: ..."
 
-    url = "https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation"
+    url = "https://chat.qwenlm.ai/api/chat/completions"
     
     headers = {
         "Authorization": f"Bearer {'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjdlYTkwMTliLWI0OTgtNGZjMy1iZGEyLTk0OTVkOWY5NWQ2NSIsImV4cCI6MTc0ODk2NTM1Nn0._mbtE_49QgSO5JTVduj7WQcfhZPeIkEhesGyTHaNP70'}",
         "Content-Type": "application/json"
     }
     data = {
-        "model": "qwen-turbo",
+        "model": "qwen-max-longcontext",  # или "qwen-turbo", "qwen-max", "qwen-max-longcontext"
         "input": {
             "prompt": prompt
         },
