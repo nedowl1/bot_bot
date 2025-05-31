@@ -12,7 +12,7 @@ import datetime
 from datetime import datetime, timedelta
 import time
 
-TOKEN = "8156778620:AAGDqv6M3xzOH75owFRtTGU59EPaz_Mz0II"
+TOKEN = "8156778620:AAG_L8Uy-NNyTGJvA8BlO8i7r-2V0cTGFBk"
 #CLOUDPAYMENTS_PUBLIC_ID = "YOUR_PUBLIC_ID"
 #CLOUDPAYMENTS_SECRET = "YOUR_SECRET_KEY"
 bot = telebot.TeleBot(TOKEN)
@@ -26,12 +26,28 @@ def connect_db():
 
 @bot.message_handler(commands=['start'])
 def start(message):
+    if len(message.text.split()) > 1:
+        # Если есть параметр после /start, например /start doc_123
+        param = message.text.split()[1]
+        if param.startswith("doc_"):
+            user_id = int(param.split("_")[1])
+            conn, cursor = connect_db()
+            cursor.execute('''SELECT * FROM doctors WHERE user_id = ?''', (user_id,))
+            doctor = cursor.fetchone()
+            if doctor:
+                doc_card_1(message=message, call=2, doctor=doctor)
+            else:
+                bot.send_message(message.chat.id, "Доктор не найден.")
+        else:
+            bot.send_message(message.chat.id, "Неверный параметр.")
+        return
     conn, cursor = connect_db()
     cursor.execute('''SELECT * FROM doctors WHERE user_id = ?''', (message.from_user.id,))
     doctor = cursor.fetchone()
     cursor.execute('''SELECT * FROM patients WHERE user_id = ?''', (message.from_user.id,))
     patient = cursor.fetchone()
-    print(doctor)
+    print('doc',doctor)
+    print('pat',patient)
     print(message.from_user.id)
     if doctor:
         profile_doc(message, call=message)
@@ -143,11 +159,13 @@ def profile_doc(message, call):
     specif = types.InlineKeyboardButton(text="🩺 Выбрать специальность", callback_data="doc_spec")
     chats = types.InlineKeyboardButton(text="💬 Чаты", callback_data="doc_chats")
     edit = types.InlineKeyboardButton(text="✏️ Редактировать профиль", callback_data="edit_profile")
+    link = types.InlineKeyboardButton(text="🔗 Ссылка на профиль", callback_data="doc_link")
+    
 
     if status == 'pending':
         marcup.add(doc, specif, edit)
     elif status == 'verified':
-        marcup.add(specif, chats, edit)
+        marcup.add(specif, chats, edit, link)
     elif status == 'rejected':
         marcup.add(doc, edit)
 
@@ -167,8 +185,6 @@ def profile_doc(message, call):
         verif_text = "❌ Верификация не пройдена. Пожалуйста, проверьте документы и попробуйте снова."
     else:
         verif_text = "Статус верификации неизвестен."
-
-    # Формируем красивый профиль
     profile_text = (
         "👨‍⚕️ *Ваш профиль врача*\n\n"
         f"👤 Имя: {doctor[2]}\n"
@@ -178,9 +194,77 @@ def profile_doc(message, call):
         f"💰 Баланс: {doctor[10]} руб.\n"
         f"🩺 Специализации: {specialization_str}\n"
     )
+    if doctor[15]:
+        profile_text = f"❌ВАШ ПРОФИЛЬ ЗАМОРОЖЕН❌\n\n Пожалуйста, обратитесь в поддержку для получения дополнительной информации.\nВаш id:{doctor[1]}\n Чат с поддержкой: @J_Milka"
+    # Если есть аватар, отправляем с фото, иначе просто текст
+    if doctor[3]:
+        try:
+            with open(doctor[3], 'rb') as photo:
+                bot.send_photo(id, photo, caption=profile_text, reply_markup=marcup, parse_mode="Markdown")
+        except Exception as e:
+            print(f"Ошибка открытия фото: {e}")
+            bot.send_message(id, text=profile_text, reply_markup=marcup, parse_mode="Markdown")
+    else:
+        bot.send_message(id, text=profile_text, reply_markup=marcup, parse_mode="Markdown")
 
-    bot.send_message(id, text=profile_text, reply_markup=marcup, parse_mode="Markdown")
+def get_doc_link(call):
+    conn, cursor = connect_db()
+    cursor.execute('''SELECT * FROM doctors WHERE user_id = ?''', (call.from_user.id,))
+    doctor = cursor.fetchone()
+    if not doctor:
+        bot.send_message(call.message.chat.id, "Профиль не найден.")
+        return
+    # Генерируем ссылку на профиль
+    profile_link = f"https://t.me/{bot.get_me().username}?start=doc_{doctor[1]}"
+    bot.send_message(
+        call.message.chat.id,
+        f"🔗 Ваша ссылка на профиль: {profile_link}\n\n"
+        "Вы можете делиться этой ссылкой с пациентами, чтобы они могли легко найти вас."
+    )
 
+@bot.message_handler(commands=['unfreeze'])
+def unfreeze_doctor(message):
+    if message.from_user.id != ADMIN_ID:
+        bot.send_message(message.chat.id, "❗️ Только администратор может разблокировать аккаунты.")
+        return
+    if len(message.text.split()) < 2:
+        bot.send_message(message.chat.id, "❗️ Пожалуйста, укажите ID доктора для разблокировки.")
+        return
+    try:
+        doc_id = int(message.text.split()[1])
+    except ValueError:
+        bot.send_message(message.chat.id, "❗️ Неверный формат ID. Пожалуйста, укажите числовой ID доктора.")
+        return
+    conn, cursor = connect_db()
+    cursor.execute('''UPDATE doctors SET is_frozen = 0, ignore_count = 0 WHERE user_id = ?''', (doc_id,))
+    conn.commit()
+    bot.send_message(doc_id, "✅ Ваш аккаунт разблокирован администрацией. Вы снова можете принимать пациентов.")
+    bot.send_message(message.chat.id, "Доктор разблокирован.")
+
+def doc_consultations(call):
+    conn, cursor = connect_db()
+    cursor.execute('''SELECT * FROM consultations WHERE doctor_id = ? AND status = ?''', (call.from_user.id, 'pending'))
+    consultations = cursor.fetchall()
+    if not consultations:
+        bot.send_message(
+            call.message.chat.id,
+            "📋 У вас нет новых запросов на консультации."
+        )
+        return
+    marcup = types.InlineKeyboardMarkup(row_width=1)
+    for consultation in consultations:
+        patient_name = consultation[2]
+        consult_id = consultation[0]
+        button_text = f"Запрос от {patient_name} (ID: {consult_id})"
+        marcup.add(types.InlineKeyboardButton(text=button_text, callback_data=f"consultat_{consult_id}"))
+    bot.send_message(
+        call.message.chat.id,
+        "📋 *Новые запросы на консультации:*\n\n"
+        "Выберите запрос, чтобы просмотреть детали и ответить.",
+        reply_markup=marcup,
+        parse_mode="Markdown"
+    )
+    
 #верификация
 
 def doc_verification(message, call):
@@ -268,13 +352,25 @@ def get_doc_spec(message, call):
         "Когда закончите, нажмите «Готово»."
     )
 
-    bot.edit_message_text(
+    try:
+        bot.edit_message_text(
         chat_id=call.message.chat.id,
         message_id=call.message.message_id,
         text=help_text,
         reply_markup=marcup,
         parse_mode="Markdown"
     )
+    except telebot.apihelper.ApiTelegramException as e:
+    # Если не получилось отредактировать (например, сообщение было фото) — просто отправляем новое сообщение
+        if "there is no text in the message to edit" in str(e):
+            bot.send_message(
+            call.message.chat.id,
+            help_text,
+            reply_markup=marcup,
+            parse_mode="Markdown"
+        )
+        else:
+            raise
 
 def get_price(message, call):
     conn, cursor = connect_db()
@@ -366,11 +462,11 @@ def edit_profile(message, call):
     phone = types.InlineKeyboardButton(text="📞 Изменить номер телефона", callback_data="phone")
     email = types.InlineKeyboardButton(text="✉️ Изменить email", callback_data="email")
     discription = types.InlineKeyboardButton(text="ℹ️ Изм./добавить описание", callback_data="description")
+    avatar = types.InlineKeyboardButton(text="🖼️ Изменить аватар", callback_data="avatar")
     marcup.add(name, phone)
-    marcup.add(email, discription)
-    bot.edit_message_text(
+    marcup.add(email, discription, avatar)
+    bot.send_message(
         chat_id=call.message.chat.id,
-        message_id=call.message.message_id,
         text=(
             "🔧 *Редактирование профиля*\n\n"
             "Выберите, что вы хотите изменить. После внесения изменений вы сразу увидите обновлённый профиль."
@@ -379,7 +475,7 @@ def edit_profile(message, call):
         parse_mode="Markdown"
     )
 
-@bot.callback_query_handler(func=lambda call: call.data in ["name", "phone", "email", "description"])
+@bot.callback_query_handler(func=lambda call: call.data in ["name", "phone", "email", "description", "avatar"])
 def edit_profile1(call):
     bot.answer_callback_query(call.id)
     if call.data == "name":
@@ -410,6 +506,14 @@ def edit_profile1(call):
             "Расскажите о себе, опыте и подходе к работе — это поможет пациентам выбрать именно вас."
         )
         bot.register_next_step_handler(call.message, get_new_description)
+    elif call.data == "avatar":
+        bot.send_message(
+            call.message.chat.id,
+            "🖼️ Отправьте новое фото профиля.\n\n"
+            "Это поможет пациентам лучше узнать вас."
+        )
+        bot.register_next_step_handler(call.message, get_new_avatar)
+    
 
 def get_new_name(message):
     conn, cursor = connect_db()
@@ -420,7 +524,7 @@ def get_new_name(message):
         "✅ Имя успешно изменено!\n\n"
         "Ваш профиль обновлён."
     )
-    profile_doc(message)
+    profile_doc(message, call=message)
 
 def get_new_phone(message):
     conn, cursor = connect_db()
@@ -431,7 +535,7 @@ def get_new_phone(message):
         "✅ Номер телефона успешно изменён!\n\n"
         "Ваш профиль обновлён."
     )
-    profile_doc(message)
+    profile_doc(message, call=message)
 
 def get_new_email(message):
     conn, cursor = connect_db()
@@ -442,7 +546,7 @@ def get_new_email(message):
         "✅ Email успешно изменён!\n\n"
         "Ваш профиль обновлён."
     )
-    profile_doc(message)
+    profile_doc(message, call=message)
 
 def get_new_description(message):
     conn, cursor = connect_db()
@@ -453,7 +557,30 @@ def get_new_description(message):
         "✅ Описание успешно изменено!\n\n"
         "Ваш профиль обновлён."
     )
-    profile_doc(message)
+    profile_doc(message, call=message)
+
+def get_new_avatar(message):
+    if message.content_type == 'photo':
+        file_info = bot.get_file(message.photo[-1].file_id)
+        downloaded_file = bot.download_file(file_info.file_path)
+        src = f'avatars/{message.from_user.id}.jpg'
+        with open(src, 'wb') as new_file:
+            new_file.write(downloaded_file)
+        conn, cursor = connect_db()
+        cursor.execute('''UPDATE doctors SET avatar = ? WHERE user_id = ?''', (src, message.from_user.id))
+        conn.commit()
+        bot.send_message(
+            message.chat.id,
+            "✅ Аватар успешно изменён!\n\n"
+            "Ваш профиль обновлён."
+        )
+        profile_doc(message, call=message)
+    else:
+        bot.send_message(
+            message.chat.id,
+            "❗️ Пожалуйста, отправьте именно фото аватара. Попробуйте ещё раз."
+        )
+        bot.register_next_step_handler(message, get_new_avatar)
 
 def profile_pat(message, call):
     try:
@@ -463,10 +590,13 @@ def profile_pat(message, call):
     marcup = types.InlineKeyboardMarkup(row_width=2)
     doc = types.InlineKeyboardButton(text="👨‍⚕️ Записаться к врачу", callback_data="doc_reg")
     chats = types.InlineKeyboardButton(text="💬 Чаты", callback_data="pat_chats")
-    marcup.add(doc, chats)
+    edit_profile = types.InlineKeyboardButton(text="✏️ Редактировать профиль", callback_data="edit_profile_pat")
+    marcup.add(doc, chats, edit_profile)
     conn, cursor = connect_db()
     cursor.execute('''SELECT * FROM patients WHERE user_id = ?''', (id,))
     patient = cursor.fetchone()
+    # Проверяем, есть ли аватар
+
     if patient:
         profile_text = (
             "🧑‍💼 *Ваш профиль пациента*\n\n"
@@ -475,7 +605,117 @@ def profile_pat(message, call):
             f"✉️ Email: {patient[5]}\n\n"
             "Выберите действие:"
         )
-        bot.send_message(id, text=profile_text, reply_markup=marcup, parse_mode="Markdown")
+        # Если есть аватар, отправляем с фото, иначе просто текст
+        if patient[3]:
+            try:
+                with open(patient[3], 'rb') as photo:
+                    bot.send_photo(id, photo, caption=profile_text, reply_markup=marcup, parse_mode="Markdown")
+            except Exception as e:
+                print(f"Ошибка открытия фото: {e}")
+                bot.send_message(id, text=profile_text, reply_markup=marcup, parse_mode="Markdown")
+        else:
+            bot.send_message(id, text=profile_text, reply_markup=marcup, parse_mode="Markdown")
+
+def edit_profile_pat(call):
+    marcup = types.InlineKeyboardMarkup(row_width=2)
+    name = types.InlineKeyboardButton(text="📝 Изменить имя", callback_data="pat_name")
+    phone = types.InlineKeyboardButton(text="📞 Изменить номер телефона", callback_data="pat_phone")
+    email = types.InlineKeyboardButton(text="✉️ Изменить email", callback_data="pat_email")
+    avatar = types.InlineKeyboardButton(text="🖼️ Изменить аватар", callback_data="pat_avatar")
+    marcup.add(name, phone, email, avatar)
+    bot.send_message(
+        call.message.chat.id,
+        text=(
+            "🔧 *Редактирование профиля*\n\n"
+            "Выберите, что вы хотите изменить. После внесения изменений вы сразу увидите обновлённый профиль."
+        ),
+        reply_markup=marcup,
+        parse_mode="Markdown"
+    )
+@bot.callback_query_handler(func=lambda call: call.data in ["pat_name", "pat_phone", "pat_email", "pat_avatar"])
+def edit_profile_pat1(call):
+    bot.answer_callback_query(call.id)
+    if call.data == "pat_name":
+        bot.send_message(
+            call.message.chat.id,
+            "✏️ Введите новое имя.\n\n"
+            "Пожалуйста, укажите, как вы хотите, чтобы вас видели врачи."
+        )
+        bot.register_next_step_handler(call.message, get_new_pat_name)
+    elif call.data == "pat_phone":
+        bot.send_message(
+            call.message.chat.id,
+            "📞 Введите новый номер телефона.\n\n"
+            "Убедитесь, что номер актуален — на него могут приходить важные уведомления."
+        )
+        bot.register_next_step_handler(call.message, get_new_pat_phone)
+    elif call.data == "pat_email":
+        bot.send_message(
+            call.message.chat.id,
+            "✉️ Введите новый email.\n\n"
+            "Проверьте правильность адреса."
+        )
+        bot.register_next_step_handler(call.message, get_new_pat_email)
+    elif call.data == "pat_avatar":
+        bot.send_message(
+            call.message.chat.id,
+            "🖼️ Отправьте новое фото профиля.\n\n"
+            "Это поможет врачам лучше узнать вас."
+        )
+        bot.register_next_step_handler(call.message, get_new_pat_avatar)
+
+def get_new_pat_name(message):
+    conn, cursor = connect_db()
+    cursor.execute('''UPDATE patients SET name = ? WHERE user_id = ?''', (message.text, message.from_user.id))
+    conn.commit()
+    bot.send_message(
+        message.chat.id,
+        "✅ Имя успешно изменено!\n\n"
+        "Ваш профиль обновлён."
+    )
+    profile_pat(message, call=message)
+def get_new_pat_phone(message):
+    conn, cursor = connect_db()
+    cursor.execute('''UPDATE patients SET phone = ? WHERE user_id = ?''', (message.text, message.from_user.id))
+    conn.commit()
+    bot.send_message(
+        message.chat.id,
+        "✅ Номер телефона успешно изменён!\n\n"
+        "Ваш профиль обновлён."
+    )
+    profile_pat(message, call=message)
+def get_new_pat_email(message):
+    conn, cursor = connect_db()
+    cursor.execute('''UPDATE patients SET email = ? WHERE user_id = ?''', (message.text, message.from_user.id))
+    conn.commit()
+    bot.send_message(
+        message.chat.id,
+        "✅ Email успешно изменён!\n\n"
+        "Ваш профиль обновлён."
+    )
+    profile_pat(message, call=message)
+def get_new_pat_avatar(message):
+    if message.content_type == 'photo':
+        file_info = bot.get_file(message.photo[-1].file_id)
+        downloaded_file = bot.download_file(file_info.file_path)
+        src = f'avatars/{message.from_user.id}.jpg'
+        with open(src, 'wb') as new_file:
+            new_file.write(downloaded_file)
+        conn, cursor = connect_db()
+        cursor.execute('''UPDATE patients SET avatar = ? WHERE user_id = ?''', (src, message.from_user.id))
+        conn.commit()
+        bot.send_message(
+            message.chat.id,
+            "✅ Аватар успешно изменён!\n\n"
+            "Ваш профиль обновлён."
+        )
+        profile_pat(message, call=message)
+    else:
+        bot.send_message(
+            message.chat.id,
+            "❗️ Пожалуйста, отправьте именно фото аватара. Попробуйте ещё раз."
+        )
+        bot.register_next_step_handler(message, get_new_pat_avatar)
 
 def doc_list(message, call):
     marcup = types.InlineKeyboardMarkup(row_width=3)
@@ -494,9 +734,8 @@ def doc_list(message, call):
     spec13 = types.InlineKeyboardButton(text="Стоматолог", callback_data="dentist_doc")
     spec14 = types.InlineKeyboardButton(text="Психиатр", callback_data="psychiatrist_doc")
     marcup.add(spec1, spec2, spec3, spec4, spec5, spec6, spec7, spec8, spec9, spec10, spec11, spec12, spec13, spec14)
-    bot.edit_message_text(
+    bot.send_message(
     chat_id=call.message.chat.id,
-    message_id=call.message.message_id,
     text=(
         "🩺 *Выберите направление*\n\n"
         "Пожалуйста, выберите специальность врача, к которому хотите записаться. "
@@ -526,7 +765,7 @@ def get_doc(message, call, filters, flag, msg, id):
     if doctors_ids:
         for doctor_id in doctors_ids:
             print(doctor_id)
-            cursor.execute('''SELECT * FROM doctors WHERE user_id = ? AND verification_status = ?''', (doctor_id, 'verified'))
+            cursor.execute('''SELECT * FROM doctors WHERE verification_status = 'verified' AND (is_frozen IS NULL OR is_frozen = 0)''')
             doctor += cursor.fetchall()
         print(doctor)
         doctor = sorted(doctor, key=lambda x: x[filters], reverse=True)
@@ -571,7 +810,14 @@ def doctors(message, call, doctor):
 def doc_card(message, call, doctor, msg):
     msg = int(msg) - 1
     conn, cursor = connect_db()
-    doc_info = doctor[msg]
+    try:
+        msg = int(msg) - 1
+        doc_info = doctor[msg]
+    except (ValueError, IndexError):
+        bot.send_message(message.chat.id, "❗️ Ошибка: некорректный номер врача. Пожалуйста, попробуйте снова.")
+        return
+    except TypeError:
+        doc_info = doctor
     cursor.execute('''SELECT * FROM specialisation WHERE user_id = ?''', (doc_info[1],))
     specializations = cursor.fetchall()
     marcup = types.InlineKeyboardMarkup(row_width=2)
@@ -604,6 +850,42 @@ def doc_card(message, call, doctor, msg):
     else:
         bot.send_message(message.chat.id, text=card_text, reply_markup=marcup, parse_mode="Markdown")
     
+# Функция для создания карточки врача с кнопкой записи на консультацию по его специализациям
+def doc_card_1(message, call, doctor):
+    conn, cursor = connect_db()
+    cursor.execute('''SELECT * FROM specialisation WHERE user_id = ?''', (doctor[1],))
+    specializations = cursor.fetchall()
+    marcup = types.InlineKeyboardMarkup(row_width=2)
+    # Кнопка теперь вызывает выбор специализации
+    consult = types.InlineKeyboardButton(text="📝 Записаться на консультацию", callback_data=f"choose_spec_{doctor[1]}")
+    back = types.InlineKeyboardButton(text="⬅️ Назад", callback_data="doc_reg")
+    marcup.add(consult, back)
+
+    spec_text = ""
+    for spec in specializations:
+        spec_text += f"🩺 {spec[3]}\n💰 Цена: {spec[4]} руб.\n\n"
+
+    card_text = (
+        f"👨‍⚕️ *Профиль врача*\n\n"
+        f"👤 Имя: {doctor[2]}\n"
+        f"🎓 Стаж: {doctor[11]} лет\n"
+        f"🏅 Рейтинг: {doctor[10]}\n"
+        f"{spec_text}"
+        f"ℹ️ Нажмите «Записаться на консультацию», чтобы выбрать специализацию."
+    )
+
+    if doctor[3]:
+        try:
+            with open(doctor[3], 'rb') as photo:
+                bot.send_photo(message.chat.id, photo, caption=card_text, reply_markup=marcup, parse_mode="Markdown")
+        except Exception as e:
+            print(f"Ошибка открытия фото: {e}")
+            bot.send_message(message.chat.id, text=card_text, reply_markup=marcup, parse_mode="Markdown")
+    else:
+        bot.send_message(message.chat.id, text=card_text, reply_markup=marcup, parse_mode="Markdown")
+
+
+
 
 def get_consultation_date(message):
     id_consult = random.randint(100000, 999999)
@@ -614,6 +896,9 @@ def get_consultation_date(message):
     conn, cursor = connect_db()
     cursor.execute('''SELECT data FROM temporary_data WHERE user_id = ?''', (message.from_user.id,))
     doctor_id = cursor.fetchone()
+    cursor.execute('''SELECT name FROM patients WHERE user_id = ?''', (message.from_user.id,))
+    name = cursor.fetchone()
+    name = name[0] if name else "Пациент"
     if doctor_id:
         doctor_id = doctor_id[0]
         cursor.execute('''SELECT * FROM doctors WHERE user_id = ?''', (doctor_id,))
@@ -624,12 +909,13 @@ def get_consultation_date(message):
                 f"📝 Вы записаны на консультацию к врачу *{doctor[2]}*.\n"
                 f"Ваше сообщение: {message.text}\n\n"
                 "Пожалуйста, дождитесь подтверждения от врача. "
-                "Если вы ошиблись — нажмите «Отменить»."
+                
             )
             bot.send_message(
                 doctor_id,
                 f"👨‍⚕️ Новый запрос на консультацию!\n"
                 f"Пациент: {message.from_user.id}\n"
+                f"Имя пациента: {name}\n"
                 f"Сообщение: {message.text}\n\n"
                 "Пожалуйста, подтвердите или отклоните заявку.",
                 reply_markup=marcup
@@ -637,8 +923,8 @@ def get_consultation_date(message):
             total_price = cursor.execute('''SELECT price FROM specialisation WHERE user_id = ?''', (doctor_id,)).fetchone()
             total_price = total_price[0]
             cursor.execute(
-                '''INSERT INTO consultations (identifier, doctor_id, patient_id, description, total_price) VALUES (?, ?, ?, ?, ?)''',
-                (id_consult, doctor_id, message.from_user.id, message.text, total_price)
+                '''INSERT INTO consultations (identifier, doctor_id, patient_id, description, total_price, created_at) VALUES (?, ?, ?, ?, ?, ?)''',
+                (id_consult, doctor_id, message.from_user.id, message.text, total_price, datetime.now())
             )
             conn.commit()
             cursor.execute('''DELETE FROM temporary_data WHERE user_id = ?''', (message.from_user.id,))
@@ -648,6 +934,44 @@ def get_consultation_date(message):
     else:
         bot.send_message(message.chat.id, "❗️ Ошибка получения данных врача.")
 
+def finish_consultation(message):
+    conn, cursor = connect_db()
+    cursor.execute('''SELECT active_chat_id FROM patients WHERE user_id = ?''', (message.from_user.id,))
+    active_chat_id = cursor.fetchone()
+    if not active_chat_id:
+        bot.send_message(message.chat.id, "Нет активной консультации.")
+        return
+    active_chat_id = active_chat_id[0]
+    cursor.execute('''UPDATE consultations SET status = ?, finished_at = ? WHERE identifier = ?''',
+                   ('completed', datetime.now(), active_chat_id))
+    conn.commit()
+    bot.send_message(message.chat.id, "Приём завершён. В течение 14 дней вы можете получить обратную связь от врача.")
+
+def show_followup_button(call, consultation):
+    finished_at = consultation[9]  # finished_at
+    followup_ping = consultation[10]  # followup_ping
+    if finished_at and followup_ping == 0:
+        if datetime.now() - datetime.fromisoformat(finished_at) < timedelta(days=14):
+            markup = types.InlineKeyboardMarkup()
+            btn = types.InlineKeyboardButton("Запросить обратную связь", callback_data=f"followup_{consultation[1]}")
+            markup.add(btn)
+            bot.send_message(call.message.chat.id, "Вы можете запросить обратную связь у пациента.", reply_markup=markup)
+
+from chat_ai import chat_with_ai
+
+@bot.message_handler(commands=['ai'])
+def ai_chat_handler(message):
+    user_text = message.text.replace('/ai', '').strip()
+    if not user_text:
+         bot.send_message(message.chat.id, "Напишите вопрос после /ai")
+         return
+    messages = [
+        {"role": "system", "content": "Ты медицинский ассистент."},
+        {"role": "user", "content": user_text}
+    ]
+    bot.send_chat_action(message.chat.id, 'typing')
+    answer = chat_with_ai(messages)
+    bot.send_message(message.chat.id, answer)
 
 import requests
 import base64
@@ -783,17 +1107,27 @@ def chats(message, call):
         pass
 
 def start_chat(call, chat_id_end):
+    print('chat_id_end', chat_id_end)
     marcup = types.ReplyKeyboardMarkup(resize_keyboard=True)
     text = types.KeyboardButton(text="💬 Отправить сообщение")
     img = types.KeyboardButton(text="🖼 Отправить фото")
     video = types.KeyboardButton(text="🎥 Отправить видео")
     audio = types.KeyboardButton(text="🎤 Отправить аудио-сообщение")
     end_consult = types.KeyboardButton(text="✅ Завершить консультацию")
+    spor = types.KeyboardButton(text="⚠️ Оспорить консультацию")
     back = types.KeyboardButton(text="⬅️ Назад")
     if chat_id_end:
-        marcup.add(text, img, video, audio, end_consult, back)
+        conn, cursor = connect_db()
+        cursor.execute('''SELECT active_chat_id FROM doctors WHERE user_id = ?''', (call.from_user.id,))
+        active_chat_id = cursor.fetchone()
+        cursor.execute('''SELECT * FROM consultations WHERE identifier = ?''', (active_chat_id[0],))
+        consultation = cursor.fetchone()
+        if consultation and consultation[5] == 'completed':
+            show_followup_button(call, consultation)
+            return
+        marcup.add(text, img, video, audio, end_consult, spor, back)
     else:
-        spor = types.KeyboardButton(text="⚠️ Оспорить консультацию")
+        
         marcup.add(text, img, video, audio, end_consult, spor, back)
     bot.send_message(
         call.message.chat.id,
@@ -808,6 +1142,50 @@ def start_chat(call, chat_id_end):
         reply_markup=marcup,
         parse_mode="Markdown"
     )
+#оценка врача после консультации
+def ret_pac(message, call):
+    conn, cursor = connect_db()
+    cursor.execute('''SELECT * FROM patients WHERE user_id = ?''', (call.from_user.id,))
+    patient = cursor.fetchone()
+    bot.send_message(
+        message.chat.id,
+        "⭐️ *Оцените врача*\n\n"
+        "Пожалуйста, оцените врача по шкале от 1 до 5. "
+        "Это поможет нам улучшить качество обслуживания и выбрать лучших специалистов для вас.\n\n"
+        "Введите вашу оценку (от 1 до 5):"
+    )
+    bot.register_next_step_handler(message, get_rating, patient=patient)
+def get_rating(message, patient):
+    try:
+        rating = int(message.text)
+        if rating < 1 or rating > 5:
+            raise ValueError("Оценка должна быть от 1 до 5.")
+    except ValueError as e:
+        bot.send_message(message.chat.id, f"❗️ Ошибка: {e}\n\nПожалуйста, введите корректную оценку.")
+        bot.register_next_step_handler(message, get_rating, patient=patient)
+        return
+    
+    conn, cursor = connect_db()
+    cursor.execute('''SELECT active_chat_id FROM patients WHERE user_id = ?''', (message.from_user.id,))
+    active_chat_id = cursor.fetchone()
+    cursor.execute('''SELECT * FROM consultations WHERE identifier = ?''', (active_chat_id[0],))
+    consultation = cursor.fetchone()
+    cursor.execute('''SELECT rating FROM doctors WHERE user_id = ?''', (consultation[3],))
+    current_rating = cursor.fetchone()
+    rating = current_rating[0] if current_rating else 0
+    if rating == 0:
+        rating = 0
+    else:
+        rating = (rating + int(message.text)) / 2
+    cursor.execute('''UPDATE doctors SET rating = ? WHERE user_id ''', (rating, consultation[3]))
+    conn.commit()
+    bot.send_message(
+        message.chat.id,
+        "✅ Спасибо за вашу оценку! "
+        "Ваш отзыв поможет нам улучшить качество обслуживания и выбрать лучших специалистов для вас."
+    )
+
+
 
 @bot.message_handler(commands=['admin'])
 def admin_panel(message):
@@ -832,8 +1210,7 @@ def handle_message(message):
     elif message.text == "🎤 Отправить аудио-сообщение":
         bot.send_message(message.chat.id, "Отправьте голосовое-собщение:")
         bot.register_next_step_handler(message, send_vocie_message)
-    elif message.text == "✅ Завершить консультацию":
-        pass
+    
     elif message.text == "⬅️ Назад":
         bot.send_message(message.chat.id, "Вы вернулись в главное меню.", reply_markup=types.ReplyKeyboardRemove())
         conn, cursor = connect_db()
@@ -862,6 +1239,76 @@ def handle_message(message):
     elif message.text == "⚠️ Оспорить консультацию":
         bot.send_message(message.chat.id, "Введите причину спора:")
         bot.register_next_step_handler(message, dispute_consultation)
+    elif message.text == "✅ Завершить консультацию":
+        conn, cursor = connect_db()
+        cursor.execute('''SELECT active_chat_id FROM patients WHERE user_id = ?''', (message.from_user.id,))
+        active_chat_id = cursor.fetchone()
+        doc = 0
+        if not active_chat_id:
+            cursor.execute('''SELECT active_chat_id FROM doctors WHERE user_id = ?''', (message.from_user.id,))
+            active_chat_id = cursor.fetchone()
+            doc = 1
+        if not active_chat_id:
+            bot.send_message(message.chat.id, "Нет активной консультации.")
+            return
+        active_chat_id = active_chat_id[0]
+        cursor.execute('''UPDATE consultations SET status = ?, finished_at = ? WHERE identifier = ?''',
+                        ('completed', datetime.now(), active_chat_id))
+        conn.commit()
+        if doc:
+            bot.send_message(message.chat.id, "Приём завершён. В течение 14 дней вы можете спросить у пациента о его состоянии.")
+        else:
+            bot.send_message(message.chat.id, "Приём завершён. В течение 14 дней вы можете получить обратную связь от врача.")
+            ai_audit_and_review(consultation_id=active_chat_id)
+            ret_pac(message, call=message)
+    if message.text.startswith('/view_chat_'):
+        chat_id = message.text.replace("/view_chat_", "")
+        print('view_chat_id', chat_id)
+        conn, cursor = connect_db()
+        cursor.execute('''SELECT * FROM chats WHERE consultation_id = ?''', (chat_id,))
+        chats = cursor.fetchone()
+        print('chat', chats)
+        if chats:
+            cursor.execute('''SELECT messages FROM chats WHERE consultation_id = ?''', (chat_id,))
+            row = cursor.fetchone()
+            if row:
+                messages = json.loads(row[0])
+                print('messages', messages)
+                count_messages = 0
+                for messagea in messages:
+                    # Отправляем по 10 сообщений в секунду
+                    if count_messages >= 10:
+                        time.sleep(1)
+                        count_messages = 0
+                    count_messages += 1
+                    if messagea['sender'] == 'patient':
+                        if 'photo' in messagea:
+                            with open(messagea['photo'], 'rb') as photo_file:
+                                bot.send_photo(message.chat.id, photo=photo_file, caption=f"Пациент: {messagea['text']}")
+                        elif 'video' in messagea:
+                            with open(messagea['video'], 'rb') as video_file:
+                                bot.send_video(message.chat.id, video=video_file, caption=f"Пациент: {messagea['text']}")
+                        elif 'voice' in messagea:
+                            with open(messagea['voice'], 'rb') as voice_file:
+                                bot.send_voice(message.chat.id, voice=voice_file, caption=f"Пациент: {messagea['text']}")
+                        else:   
+                            bot.send_message(message.chat.id, f"Пациент: {messagea['text']}")
+                    elif messagea['sender'] == 'doctor':
+                        if 'photo' in messagea:
+                            with open(messagea['photo'], 'rb') as photo_file:
+                                bot.send_photo(message.chat.id, photo=photo_file, caption=f"Врач: {messagea['text']}")
+                        elif 'video' in messagea:
+                            with open(messagea['video'], 'rb') as video_file:
+                                bot.send_video(message.chat.id, video=video_file, caption=f"Врач: {messagea['text']}")
+                        elif 'voice' in messagea:
+                            with open(messagea['voice'], 'rb') as voice_file:
+                                bot.send_voice(message.chat.id, voice=voice_file, caption=f"Врач: {messagea['text']}")
+                        else:   
+                            bot.send_message(message.chat.id, f"Врач: {messagea['text']}")
+            else:
+                bot.send_message(message.chat.id, "Сообщения не найдены.")
+        else:
+            bot.send_message(message.chat.id, "Чат не найден.")
     else:
         try:
             msg = message.text
@@ -873,6 +1320,41 @@ def handle_message(message):
         except Exception as e:
             print(f"Ошибка при обработке сообщения: {e}")
             bot.send_message(message.chat.id, "Произошла ошибка. Пожалуйста, попробуйте еще раз.")
+    
+import importlib
+import json
+
+
+
+def ai_audit_and_review(consultation_id):
+    conn, cursor = connect_db()
+    cursor.execute('''SELECT * FROM chats WHERE consultation_id = ?''', (consultation_id,))
+    chat = cursor.fetchone()
+    if not chat or not chat[4]:
+        print("Нет сообщений для аудита")
+        return
+    messages = json.loads(chat[4])
+    chat_text = ""
+    for msg in messages:
+        sender = "Врач" if msg.get("sender") == "doctor" else "Пациент"
+        chat_text += f"{sender}: {msg.get('text','')}\n"
+    ai_analis = importlib.import_module("ai_analis")
+    ai_score, ai_summary = ai_analis.analyze_chat(chat_text)
+    cursor.execute('''SELECT * FROM consultations WHERE identifier = ?''', (consultation_id,))
+    consult = cursor.fetchone()
+    doctor_id = consult[3]
+    patient_id = consult[2]
+    # Сохраняем оценку в reviews (создайте таблицу reviews, если нет)
+    cursor.execute('''INSERT INTO reviews (doctor_id, patient_id, ai_rating, comments, consultation_id) VALUES (?, ?, ?, ?, ?)''',
+                   (doctor_id, patient_id, ai_score, ai_summary, consultation_id))
+    conn.commit()
+    if ai_score < 3:
+        bot.send_message(
+            ADMIN_ID,
+            f"⚠️ AI-аудит: низкая оценка ({ai_score}) по консультации {consultation_id}.\n"
+            f"Резюме: {ai_summary}\n"
+            f"Открыть чат: /view_chat_{consultation_id}"
+        )
 
 def dispute_consultation(message):
     message_text = message.text
@@ -1439,7 +1921,102 @@ def check_doc(call):
     with open(data[7], 'rb') as photo:
         bot.send_photo(call.message.chat.id, photo=photo, caption=f"Доктор: {data[2]}", reply_markup=markup)
     
+@bot.callback_query_handler(func=lambda call: call.data.startswith("followup_"))
+def followup_request(call):
+    consultation_id = call.data.replace("followup_", "")
+    print('consultation_id', consultation_id)
+    conn, cursor = connect_db()
+    cursor.execute('''SELECT * FROM consultations WHERE identifier = ?''', (consultation_id,))
+    consultation = cursor.fetchone()
+    if not consultation:
+        bot.send_message(call.message.chat.id, "Консультация не найдена.")
+        return
+    # Проверяем, был ли уже пинг
+    if consultation[10]:  # followup_ping
+        bot.send_message(call.message.chat.id, "Вы уже отправляли запрос на обратную связь по этой консультации.")
+        return
+    # Ставим флаг
+    cursor.execute('''UPDATE consultations SET followup_ping = 1 WHERE identifier = ?''', (consultation_id,))
+    conn.commit()
+    # Отправляем пациенту
+    patient_id = consultation[2]
+    doctor_id = consultation[3]
+    cursor.execute('''SELECT name FROM doctors WHERE user_id = ?''', (doctor_id,))
+    doc_name = cursor.fetchone()[0]
+    markup = types.InlineKeyboardMarkup()
+    markup.add(
+        types.InlineKeyboardButton("🟢 Лучше", callback_data=f"1followup_status_{consultation_id}_good"),
+        types.InlineKeyboardButton("🟡 Без изменений", callback_data=f"1followup_status_{consultation_id}_neutral"),
+        types.InlineKeyboardButton("🔴 Хуже", callback_data=f"1followup_status_{consultation_id}_bad"),
+    )
+    bot.send_message(
+        patient_id,
+        f"Доктор {doc_name} интересуется, как вы себя чувствуете после консультации. Выберите вариант:",
+        reply_markup=markup
+    )
+    bot.send_message(call.message.chat.id, "Запрос отправлен пациенту.")
 
+@bot.callback_query_handler(func=lambda call: call.data.startswith("1followup_status_"))
+def followup_status(call):
+    parts = call.data.split("_")
+    consultation_id = parts[2]
+    status = parts[3]
+    conn, cursor = connect_db()
+    cursor.execute('''SELECT * FROM consultations WHERE identifier = ?''', (consultation_id,))
+    consultation = cursor.fetchone()
+    doctor_id = consultation[3]
+    patient_id = consultation[2]
+    # Можно добавить поле followup_status в consultations, если хотите хранить результат
+    try:
+        cursor.execute('''ALTER TABLE consultations ADD COLUMN followup_status TEXT''')
+        conn.commit()
+    except Exception:
+        pass  # поле уже есть
+    cursor.execute('''UPDATE consultations SET followup_status = ? WHERE identifier = ?''', (status, consultation_id))
+    conn.commit()
+    # Уведомляем врача
+    status_text = {"good": "🟢 Лучше", "neutral": "🟡 Без изменений", "bad": "🔴 Хуже"}[status]
+    bot.send_message(doctor_id, f"Пациент ответил на ваш запрос: {status_text}")
+    # Если "хуже" — предложить пациенту оформить новую консультацию
+    if status == "bad":
+        markup = types.InlineKeyboardMarkup()
+        markup.add(types.InlineKeyboardButton("Оформить новую консультацию", callback_data="doc_reg"))
+        bot.send_message(
+            patient_id,
+            "❗️ Если ваше самочувствие ухудшилось, вы можете оформить новую консультацию или обратиться в экстренную службу.",
+            reply_markup=markup
+        )
+    else:
+        bot.send_message(patient_id, "Спасибо за обратную связь! Если потребуется — вы всегда можете обратиться к врачу снова.")
+
+import threading
+
+def auto_refund_job():
+    while True:
+        conn, cursor = connect_db()
+        now = datetime.now()
+        cursor.execute('''SELECT * FROM consultations WHERE status = ?''', ('pending',))
+        consultations = cursor.fetchall()
+        for consult in consultations:
+            created_at = datetime.fromisoformat(consult[8])  # consult[8] = created_at
+            if (now - created_at) > timedelta(hours=24):
+                # Возврат: меняем статус, уведомляем, возвращаем деньги (если реализовано)
+                cursor.execute('''UPDATE consultations SET status = ? WHERE identifier = ?''', ('refunded', consult[1]))
+                conn.commit()
+                bot.send_message(consult[2], "⏳ Врач не ответил на ваш запрос в течение 24 часов. Средства возвращены, вы можете выбрать другого врача.")
+                bot.send_message(consult[3], "❗️ Ваш аккаунт может быть ограничен за игнорирование заявок.")
+                cursor.execute('''UPDATE doctors SET ignore_count = COALESCE(ignore_count, 0) + 1 WHERE user_id = ?''', (consult[3],))
+                cursor.execute('''SELECT ignore_count FROM doctors WHERE user_id = ?''', (consult[3],))
+                ignore_count = cursor.fetchone()[0]
+                if ignore_count >= 4:
+                    cursor.execute('''UPDATE doctors SET is_frozen = 1 WHERE user_id = ?''', (consult[3],))
+                    bot.send_message(consult[3], "❌ Ваш аккаунт заморожен из-за неоднократного игнорирования заявок. Обратитесь в администрацию для разблокировки.")
+                conn.commit()
+        time.sleep(3600)  # Проверять раз в час
+
+
+# Запускать в отдельном потоке:
+threading.Thread(target=auto_refund_job, daemon=True).start()
 
 @bot.callback_query_handler(func=lambda call: True)
 def callback_query(call):
@@ -1513,17 +2090,33 @@ def callback_query(call):
         conn.commit()
         get_doc(message=call.message, call=call, filters=filters, flag=False, msg=None, id=call.from_user.id)
     elif call.data.startswith("consult_"):
-        id = call.data.replace("consult_", "")
-        conn, cursor = connect_db()
-        cursor.execute('''INSERT INTO temporary_data (user_id, data) VALUES (?, ?)''', (call.from_user.id, id))
-        conn.commit()
-        bot.send_message(
-        call.message.chat.id,
-    "📝 Пожалуйста, опишите вашу проблему максимально подробно.\n\n"
-    "Это поможет врачу быстрее разобраться в ситуации и дать более точную консультацию.\n\n"
-    "Например: «Беспокоит боль в горле и температура уже 3 дня...»"
-)
-        bot.register_next_step_handler(call.message, get_consultation_date)
+        parts = call.data.split("_")
+        if len(parts) == 3:
+            doctor_id = int(parts[1])
+            spec_id = int(parts[2])
+            # Сохраняем выбранную специализацию во временные данные, если нужно
+            conn, cursor = connect_db()
+            cursor.execute('''INSERT OR REPLACE INTO temporary_data (user_id, data, spec_id) VALUES (?, ?, ?)''', (call.from_user.id, doctor_id, spec_id))
+            conn.commit()
+            bot.send_message(
+                call.message.chat.id,
+                "📝 Пожалуйста, опишите вашу проблему максимально подробно.\n\n"
+                "Это поможет врачу быстрее разобраться в ситуации и дать более точную консультацию.\n\n"
+                "Например: «Беспокоит боль в горле и температура уже 3 дня...»"
+            )
+            bot.register_next_step_handler(call.message, get_consultation_date)
+        else:
+            id = call.data.replace("consult_", "")
+            conn, cursor = connect_db()
+            cursor.execute('''INSERT INTO temporary_data (user_id, data) VALUES (?, ?)''', (call.from_user.id, id))
+            conn.commit()
+            bot.send_message(
+                call.message.chat.id,
+                "📝 Пожалуйста, опишите вашу проблему максимально подробно.\n\n"
+                "Это поможет врачу быстрее разобраться в ситуации и дать более точную консультацию.\n\n"
+                "Например: «Беспокоит боль в горле и температура уже 3 дня...»"
+            )
+            bot.register_next_step_handler(call.message, get_consultation_date)
     elif call.data.startswith("approve"):
         id_consult = call.data.replace("approve", "")
         conn, cursor = connect_db()
@@ -1642,9 +2235,15 @@ def callback_query(call):
                 bot.send_message(call.message.chat.id, "Консультация не найдена.")
         else:
             bot.send_message(call.message.chat.id, "Чат не найден.")
+    
     elif call.data.startswith("view_chat_"):
-        chat_id = call.data.replace("view_chat_", "")
-        print('view_chat_id', chat_id)
+        # Получаем chat_id из call.data
+        if call.data.startswith("view_chat_"):
+            chat_id = call.data.replace("view_chat_", "")
+            print('view_chat_id', chat_id)
+        else:
+            chat_id = message.text.replace("view_chat_", "")
+            print('view_chat_id', chat_id)
         conn, cursor = connect_db()
         cursor.execute('''SELECT * FROM chats WHERE consultation_id = ?''', (chat_id,))
         chat = cursor.fetchone()
@@ -1692,6 +2291,34 @@ def callback_query(call):
             bot.send_message(call.message.chat.id, "Чат не найден.")
     elif call.data == 'doc_ver_admin':
         doc_ver_admin(call)
+    elif call.data == "edit_profile_pat":
+        edit_profile_pat(call=call)
+    elif call.data == "doc_consultations":
+        doc_consultations(call=call)
+    elif call.data == 'doc_link':
+        get_doc_link(call=call)
+    elif call.data.startswith("choose_spec_"):
+        doctor_id = int(call.data.replace("choose_spec_", ""))
+        conn, cursor = connect_db()
+        cursor.execute('''SELECT * FROM specialisation WHERE user_id = ?''', (doctor_id,))
+        specs = cursor.fetchall()
+        if not specs:
+            bot.send_message(call.message.chat.id, "У врача не указаны специализации.")
+            return
+        marcup = types.InlineKeyboardMarkup(row_width=1)
+        for spec in specs:
+            # spec[0] — id специализации, spec[3] — название
+            marcup.add(types.InlineKeyboardButton(
+                text=f"{spec[3]} — {spec[4]} руб.",
+                callback_data=f"consult_{doctor_id}_{spec[0]}"
+            ))
+        marcup.add(types.InlineKeyboardButton(text="⬅️ Назад", callback_data=f"doc_card_{doctor_id}"))
+        bot.send_message(
+            chat_id=call.message.chat.id,
+            text="🩺 Выберите специализацию для консультации:",
+            reply_markup=marcup
+        )
+
 
 
 

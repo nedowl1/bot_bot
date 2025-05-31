@@ -23,7 +23,9 @@ c.execute('''CREATE TABLE doctors (
     balance REAL DEFAULT 0.0, -- Для вывода денег
     experience INTEGER, -- Стаж работы (в годах)
     active_chat_id INTEGER, -- ID активного чата
-    registration_date DATETIME DEFAULT CURRENT_TIMESTAMP
+    registration_date DATETIME DEFAULT CURRENT_TIMESTAMP,
+    ign_count INTEGER DEFAULT 0, -- Количество игнорирований
+    is_frozen INTEGER DEFAULT 0 -- 1 = активен, 0 = неактивен
 )''')
 print("Таблица doctors создана или уже существует.")
 
@@ -53,6 +55,8 @@ c.execute('''CREATE TABLE consultations (
     payment_status TEXT DEFAULT 'pending', -- 'pending', 'paid', 'refunded'
     total_price REAL NOT NULL, -- Сумма оплаты
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    finished_at DATETIME, -- Дата завершения консультации
+    followup_ping INTEGER DEFAULT 0, -- Количество пингов для повторной консультации
     FOREIGN KEY(patient_id) REFERENCES patients(id),
     FOREIGN KEY(doctor_id) REFERENCES doctors(id)
 )
@@ -94,9 +98,9 @@ c.execute('''CREATE TABLE reviews (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     doctor_id INTEGER NOT NULL,
     patient_id INTEGER NOT NULL,
-    rating INTEGER NOT NULL CHECK(rating BETWEEN 1 AND 5), -- Оценка пациента
     ai_rating REAL DEFAULT NULL, -- Оценка AI
     comments TEXT,
+    consultation_id INTEGER NOT NULL, -- ID консультации
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY(doctor_id) REFERENCES doctors(id),
     FOREIGN KEY(patient_id) REFERENCES patients(id)
@@ -116,6 +120,7 @@ c.execute('''CREATE TABLE temporary_data (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL UNIQUE,
     data INTEGER NOT NULL, -- Временные данные
+    spec_id INTEGER, -- ID специальности
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 )''')
 print("Таблица temporary_data создана или уже существует.")
