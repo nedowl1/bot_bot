@@ -12,11 +12,11 @@ import datetime
 from datetime import datetime, timedelta
 import time
 
-TOKEN = "8156778620:AAG_L8Uy-NNyTGJvA8BlO8i7r-2V0cTGFBk"
+TOKEN = "8156778620:AAHu0pNHujxlrhLU5IZJOvd1wy3aVMqDmBU"
 #CLOUDPAYMENTS_PUBLIC_ID = "YOUR_PUBLIC_ID"
 #CLOUDPAYMENTS_SECRET = "YOUR_SECRET_KEY"
 bot = telebot.TeleBot(TOKEN)
-ADMIN_ID = 2146048678  # Замените на ваш ID администратора
+ADMIN_ID = (2146048678, 935727305, 2107643694)  # Замените на ваш ID администратора
 #ADMIN_ID = (935727305, 2107643694)
 def connect_db():
     conn = sqlite3.connect("db.db", check_same_thread=False)
@@ -1078,9 +1078,9 @@ def chats(message, call):
         print('doctor', doctor)
         print('patient', patient)
         if consultation:
-            chat_button = types.InlineKeyboardButton(text=f"Чат с {patient[2] if call.data == "doc_chats" else doctor[2]}", callback_data=f"chat_{chat[1]}_1" if call.data == "doc_chats" else f"chat_{chat[1]}_2")
+            chat_button = types.InlineKeyboardButton(text=f"Чат с {patient[2] if call.data == 'doc_chats' else doctor[2]}", callback_data=f"chat_{chat[1]}_1" if call.data == 'doc_chats' else f"chat_{chat[1]}_2")
             marcup.add(chat_button)
-    back = types.InlineKeyboardButton(text="Назад", callback_data=f"{'back_doc'if call.data == "doc_chats" else "back_pat"}")
+    back = types.InlineKeyboardButton(text="Назад", callback_data=f"{'back_doc'if call.data == 'doc_chats' else 'back_pat'}")
     marcup.add(back)
     print('chats', chats)
     #выводим список чатов
@@ -2319,8 +2319,8 @@ def callback_query(call):
             reply_markup=marcup
         )
 
+#
 
-##
 
 
 bot.polling(none_stop=True)
