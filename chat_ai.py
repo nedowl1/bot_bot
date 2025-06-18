@@ -1,7 +1,7 @@
 import requests
 
 API_URL = "https://api.openai.com/v1/chat/completions"
-API_KEY = "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"  # ваш ключ
+API_KEY = ""  # ваш ключ
 
 def chat_with_ai(messages, model="gpt-4o", max_tokens=500):
     """
