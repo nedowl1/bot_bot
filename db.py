@@ -25,7 +25,8 @@ c.execute('''CREATE TABLE doctors (
     active_chat_id INTEGER, -- ID активного чата
     registration_date DATETIME DEFAULT CURRENT_TIMESTAMP,
     ign_count INTEGER DEFAULT 0, -- Количество игнорирований
-    is_frozen INTEGER DEFAULT 0 -- 1 = активен, 0 = неактивен
+    is_frozen INTEGER DEFAULT 0, -- 1 = активен, 0 = неактивен
+    rassilka INTEGER DEFAULT 1 -- 1 = рассылка включена, 0 = выключена
 )''')
 print("Таблица doctors создана или уже существует.")
 
@@ -39,7 +40,8 @@ c.execute('''CREATE TABLE patients (
     spec TEXT, -- Специальность
     filter TEXT, -- Фильтр по специальности
     active_chat_id INTEGER, -- ID активного чата
-    registration_date DATETIME DEFAULT CURRENT_TIMESTAMP
+    registration_date DATETIME DEFAULT CURRENT_TIMESTAMP,
+    rassilka INTEGER -- 1 = рассылка включена, 0 = выключена
     
 )
 ''')

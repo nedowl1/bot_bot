@@ -12,7 +12,7 @@ import datetime
 from datetime import datetime, timedelta
 import time
 
-TOKEN = "8156778620:AAHu0pNHujxlrhLU5IZJOvd1wy3aVMqDmBU"
+TOKEN = "8156778620:AAFHqnTDYef3-qTlvOm9HY95bHFBiYAB4HQ"
 #CLOUDPAYMENTS_PUBLIC_ID = "YOUR_PUBLIC_ID"
 #CLOUDPAYMENTS_SECRET = "YOUR_SECRET_KEY"
 bot = telebot.TeleBot(TOKEN)
@@ -23,6 +23,24 @@ def connect_db():
     cursor = conn.cursor()
     return conn, cursor
 
+       
+
+@bot.message_handler(commands=['policy'])
+def policy(message):
+    bot.send_message(message.chat.id, text= "1️⃣ <a href='https://telegra.ph/Polzovatelskoe-soglashenie-06-18-14'>Пользовательским соглашением</a>\n\n"
+        "2️⃣ <a href='https://telegra.ph/POLITIKA-KONFIDENCIALNOSTI-06-18-8'>Политикой конфиденциальности</a>\n\n"
+        "3️⃣ <a href='https://telegra.ph/SOGLASIE-NA-OBRABOTKU-PERSONALNYH-DANNYH-06-18'>Согласие на обработку персональных данных</a>\n\n"
+        "4️⃣ <a href='https://telegra.ph/OGRANICHENIE-OTVETSTVENNOSTI-DISKLEJMER-06-18'>Дисклеймер об ответственности.</a>\n\n"
+        "5⃣ <a href='https://telegra.ph/OBYAZATELSTVO-O-SOHRANENII-VRACHEBNOJ-TAJNY-06-18'>ОБЯЗАТЕЛЬСТВО О СОХРАНЕНИИ ВРАЧЕБНОЙ ТАЙНЫ</a>\n\n"
+        "6⃣ <a href='https://telegra.ph/SOGLASIE-NA-POLUCHENIE-REKLAMNOJ-I-INFORMACIONNOJ-RASSYLKI-06-18'>СОГЛАСИЕ НА ПОЛУЧЕНИЕ РЕКЛАМНОЙ И ИНФОРМАЦИОННОЙ РАССЫЛКИ</a>\n\n"
+        "7⃣ <a href='https://telegra.ph/SOGLASHENIE-PRI-REGISTRACII-SPECIALISTA-06-18'>СОГЛАШЕНИЕ ПРИ РЕГИСТРАЦИИ СПЕЦИАЛИСТА</a>\n\n"
+        "8⃣ <a href='https://telegra.ph/PUBLICHNAYA-OFERTA-O-ZAKLYUCHENII-DOGOVORA-S-PLATFORMOJ-06-18'>ПУБЛИЧНАЯ ОФЕРТА О ЗАКЛЮЧЕНИИ ДОГОВОРА С ПЛАТФОРМОЙ для специалистов (врачей, консультантов)</a>\n\n"
+        "Индивидуальный предприниматель Колесников Александр Дмитриевич\n"
+        "ИНН: 773701767759\n"
+        "ОГРНИП: 325774600336521\n"
+        "Email: sasha123011@gmail.com\n"
+        "Telegram: @J_Milka",
+            parse_mode="HTML")
 
 @bot.message_handler(commands=['start'])
 def start(message):
@@ -54,11 +72,58 @@ def start(message):
     elif patient:
         profile_pat(message, call=message)
     else:
-        marcup = types.InlineKeyboardMarkup(row_width=2)
-        doc = types.InlineKeyboardButton(text="👨‍⚕️ Я доктор", callback_data="doctor")
-        pat = types.InlineKeyboardButton(text="🧑‍💼 Я пациент", callback_data="patient")
-        marcup.add(doc, pat)
-        bot.send_message(message.chat.id, "👋 Добро пожаловать в сервис онлайн-консультаций!\n\n"
+        fl = 1
+        polt_sogl(message, fl)
+
+def polt_sogl(message, fl):    
+    markup = types.InlineKeyboardMarkup()
+    agree_button = types.InlineKeyboardButton(text='✅ Согласен', callback_data='agree_1' if fl==1 else 'agree_0')
+    disagree_button = types.InlineKeyboardButton(text='❌ Не согласен', callback_data='disagree')
+    rassilka_button = types.InlineKeyboardButton(text='✅Рассылки' if fl==1 else '❌Рассылки', callback_data='rassilka_on' if fl==1 else 'rassilka_off')
+    markup.add(agree_button, disagree_button, rassilka_button)
+    try:
+        bot.edit_message_text(
+        chat_id=message.chat.id,
+        message_id=message.message_id,
+        text=(
+            "Перед использованием бота, пожалуйста, ознакомьтесь с:\n\n"
+            "1️⃣ [Пользовательским соглашением](https://telegra.ph/Polzovatelskoe-soglashenie-06-18-14)\n"
+            "2️⃣ [Политикой конфиденциальности](https://telegra.ph/POLITIKA-KONFIDENCIALNOSTI-06-18-8)\n"
+            "3️⃣ [Согласие на обработку персональных данных](https://telegra.ph/SOGLASIE-NA-OBRABOTKU-PERSONALNYH-DANNYH-06-18)\n"
+            "4️⃣ [СОГЛАСИЕ НА ПОЛУЧЕНИЕ РЕКЛАМНОЙ И ИНФОРМАЦИОННОЙ РАССЫЛКИ](https://telegra.ph/SOGLASIE-NA-POLUCHENIE-REKLAMNOJ-I-INFORMACIONNOJ-RASSYLKI-06-18)"
+            "5⃣ [Дисклеймер об ответственности](https://telegra.ph/OGRANICHENIE-OTVETSTVENNOSTI-DISKLEJMER-06-18).\n\n"
+            "Нажимая \"Согласен\", вы подтверждаете, что ознакомились и принимаете условия."
+        ),
+        reply_markup=markup,
+        parse_mode="Markdown"
+    )
+    except telebot.apihelper.ApiTelegramException as e:
+        bot.send_message(message.chat.id,text=(
+            "Перед использованием бота, пожалуйста, ознакомьтесь с:\n\n"
+            "1️⃣ [Пользовательским соглашением](https://telegra.ph/Polzovatelskoe-soglashenie-06-18-14)\n"
+            "2️⃣ [Политикой конфиденциальности](https://telegra.ph/POLITIKA-KONFIDENCIALNOSTI-06-18-8)\n"
+            "3️⃣ [Согласие на обработку персональных данных](https://telegra.ph/SOGLASIE-NA-OBRABOTKU-PERSONALNYH-DANNYH-06-18)\n"
+            "4️⃣ [Дисклеймер об ответственности](https://telegra.ph/OGRANICHENIE-OTVETSTVENNOSTI-DISKLEJMER-06-18).\n\n"
+            "Нажимая \"Согласен\", вы подтверждаете, что ознакомились и принимаете условия."
+        ),
+        reply_markup=markup,
+        parse_mode="Markdown"
+    )
+
+def start1(message,fl): 
+    conn, cursor = connect_db()
+    cursor.execute('''SELECT * FROM doctors WHERE user_id = ?''', (message.from_user.id,))
+    doctor = cursor.fetchone()
+    cursor.execute('''SELECT * FROM patients WHERE user_id = ?''', (message.from_user.id,))
+    patient = cursor.fetchone()
+    print('doc',doctor)
+    print('pat',patient)
+    print(message.from_user.id)       
+    marcup = types.InlineKeyboardMarkup(row_width=2)
+    doc = types.InlineKeyboardButton(text="👨‍⚕️ Я доктор", callback_data=f"doctor_{fl}")
+    pat = types.InlineKeyboardButton(text="🧑‍💼 Я пациент", callback_data=f"patient_{fl}")
+    marcup.add(doc, pat)
+    bot.send_message(message.chat.id, "👋 Добро пожаловать в сервис онлайн-консультаций!\n\n"
         "Здесь вы можете:\n"
         "— Найти врача по специальности\n"
         "— Получить консультацию\n"
@@ -68,10 +133,25 @@ def start(message):
     patients = cursor.fetchall()
     print('patients', patients)
 
+def reg_doc_sogl(call, fl):
+    markup = types.InlineKeyboardMarkup()
+    agree_button = types.InlineKeyboardButton(text='✅ Согласен', callback_data=f'dagree_{fl}')
+    disagree_button = types.InlineKeyboardButton(text='❌ Не согласен', callback_data='disagree')
+    markup.add(agree_button, disagree_button)
+    bot.send_message(call.message.chat.id, text="Перед регистрацией, ознакомтись пожалуйста с условиями для врачей\n\n"
+                    '1⃣ [ОБЯЗАТЕЛЬСТВО О СОХРАНЕНИИ ВРАЧЕБНОЙ ТАЙНЫ](https://telegra.ph/OBYAZATELSTVO-O-SOHRANENII-VRACHEBNOJ-TAJNY-06-18)\n'
+                    '2⃣ [СОГЛАШЕНИЕ ПРИ РЕГИСТРАЦИИ СПЕЦИАЛИСТА](https://telegra.ph/SOGLASHENIE-PRI-REGISTRACII-SPECIALISTA-06-18)\n'
+                    '3⃣ [ПУБЛИЧНАЯ ОФЕРТА О ЗАКЛЮЧЕНИИ ДОГОВОРА С ПЛАТФОРМОЙ для специалистов (врачей, консультантов)](https://telegra.ph/PUBLICHNAYA-OFERTA-O-ZAKLYUCHENII-DOGOVORA-S-PLATFORMOJ-06-18)\n\n'
+                    "Нажимая \"Согласен\", вы подтверждаете, что ознакомились и принимаете условия."
+        ,
+        reply_markup=markup,
+        parse_mode="Markdown"
+                     )
 
 user_data = {}
-def doc_reg(message, user_id):
+def doc_reg(message, user_id, fl):
     user_data[user_id] = {}
+    user_data[user_id]['rassilka'] = fl
     bot.send_message(message.chat.id, "Пожалуйста, введите ваше имя. Это поможет пациентам узнать вас.")
     bot.register_next_step_handler(message, get_doc_name)
 
@@ -92,11 +172,12 @@ def get_doc_email(message):
         "✅ Следующий шаг — подтвердите документы для работы на платформе."
     )
     conn, cursor = connect_db()
-    cursor.execute('''INSERT INTO doctors (user_id, name, phone, email) VALUES (?, ?, ?, ?)''', (
+    cursor.execute('''INSERT INTO doctors (user_id, name, phone, email, rassilka) VALUES (?, ?, ?, ?, ?)''', (
         message.from_user.id,
         user_data[message.from_user.id]['name'],
         user_data[message.from_user.id]['phone'],
-        user_data[message.from_user.id]['email']
+        user_data[message.from_user.id]['email'],
+        user_data[message.from_user.id]['rassilka']
     ))
     conn.commit()
     bot.send_message(message.chat.id, 
@@ -108,12 +189,13 @@ def get_doc_email(message):
     print(cursor.execute('''SELECT * FROM doctors WHERE user_id = ?''', (message.from_user.id,)).fetchall())
     profile_doc(message, call=message)
 
-def pat_reg(message, call):
+def pat_reg(message, call, fl):
     bot.send_message(message.chat.id, "🧑‍💼 Давайте зарегистрируем вас как пациента!\n\n"
         "Пожалуйста, введите ваше имя. Это поможет врачу обращаться к вам лично.")
-    bot.register_next_step_handler(message, get_pat_name)
-def get_pat_name(message):
+    bot.register_next_step_handler(message, get_pat_name, fl)
+def get_pat_name(message, fl):
     user_data[message.from_user.id] = {}
+    user_data[message.from_user.id]['rassilka'] = fl
     user_data[message.from_user.id]['name'] = message.text
     bot.send_message(message.chat.id, "📞 Теперь введите ваш номер телефона.\n\n"
         "❗️ Мы не будем показывать его другим пользователям без вашего согласия.")
@@ -131,11 +213,12 @@ def get_pat_email(message):
         "✅ Теперь вы можете выбрать врача и начать консультацию!"
     )
     con, cursor = connect_db()
-    cursor.execute('''INSERT INTO patients (user_id, name, phone, email) VALUES (?, ?, ?, ?)''', (
+    cursor.execute('''INSERT INTO patients (user_id, name, phone, email, rassilka) VALUES (?, ?, ?, ?, ?)''', (
         message.from_user.id,
         user_data[message.from_user.id]['name'],
         user_data[message.from_user.id]['phone'],
-        user_data[message.from_user.id]['email']
+        user_data[message.from_user.id]['email'],
+        user_data[message.from_user.id]['rassilka']
     ))
     con.commit()
     profile_pat(message, call=message)
@@ -152,7 +235,9 @@ def profile_doc(message, call):
         bot.send_message(id, "Профиль не найден.")
         return
     status, balance = status_balance
-
+    cursor.execute("""SELECT rassilka FROM doctors WHERE user_id = ?""", (id,))
+    fl = cursor.fetchone()
+    print('fl =', fl)
     # Кнопки профиля
     marcup = types.InlineKeyboardMarkup(row_width=2)
     doc = types.InlineKeyboardButton(text="📑 Пройти верификацию", callback_data="doc_verification")
@@ -160,14 +245,15 @@ def profile_doc(message, call):
     chats = types.InlineKeyboardButton(text="💬 Чаты", callback_data="doc_chats")
     edit = types.InlineKeyboardButton(text="✏️ Редактировать профиль", callback_data="edit_profile")
     link = types.InlineKeyboardButton(text="🔗 Ссылка на профиль", callback_data="doc_link")
+    rass = types.InlineKeyboardButton(text= "❌Отказаться от рассылки" if fl[0]==1 else "✅Согл. на рассылку", callback_data="doc_off_rass" if fl[0]==1 else "doc_on_rass")
     
 
     if status == 'pending':
-        marcup.add(doc, specif, edit)
+        marcup.add(doc, specif, edit, rass)
     elif status == 'verified':
-        marcup.add(specif, chats, edit, link)
+        marcup.add(specif, chats, edit, link, rass)
     elif status == 'rejected':
-        marcup.add(doc, edit)
+        marcup.add(doc, edit, rass)
 
     cursor.execute('''SELECT * FROM doctors WHERE user_id = ?''', (id,))
     doctor = cursor.fetchone()
@@ -583,16 +669,21 @@ def get_new_avatar(message):
         bot.register_next_step_handler(message, get_new_avatar)
 
 def profile_pat(message, call):
+    conn, cursor = connect_db()
+    
     try:
         id = call.from_user.id
     except AttributeError:
         id = message.from_user.id
+    cursor.execute("""SELECT rassilka FROM patients WHERE user_id = ?""", (id,))
+    fl = cursor.fetchone()
     marcup = types.InlineKeyboardMarkup(row_width=2)
     doc = types.InlineKeyboardButton(text="👨‍⚕️ Записаться к врачу", callback_data="doc_reg")
     chats = types.InlineKeyboardButton(text="💬 Чаты", callback_data="pat_chats")
     edit_profile = types.InlineKeyboardButton(text="✏️ Редактировать профиль", callback_data="edit_profile_pat")
+    rass = types.InlineKeyboardButton(text= "❌Отказаться от рассылки" if fl[0]==1 else "✅Согл. на рассылку", callback_data="pat_off_rass" if fl[0]==1 else "pat_on_rass")
     marcup.add(doc, chats, edit_profile)
-    conn, cursor = connect_db()
+    
     cursor.execute('''SELECT * FROM patients WHERE user_id = ?''', (id,))
     patient = cursor.fetchone()
     # Проверяем, есть ли аватар
@@ -1189,12 +1280,65 @@ def get_rating(message, patient):
 
 @bot.message_handler(commands=['admin'])
 def admin_panel(message):
-    if message.from_user.id == ADMIN_ID:
+    if message.from_user.id in ADMIN_ID:
         markup = types.InlineKeyboardMarkup(row_width=2)
         veri = types.InlineKeyboardButton(text="Заявки на верификацию", callback_data="doc_ver_admin")
         spor = types.InlineKeyboardButton(text="Заявки на оспаривание", callback_data="dispute_consultation")
-        markup.add(veri, spor)
+        rassilka = types.InlineKeyboardButton(text="Рассылки", callback_data="rassilka")
+        markup.add(veri, spor, rassilka)
         bot.send_message(message.chat.id, "Добро пожаловать в админ-панель!", reply_markup=markup)
+
+def rassilka(call):
+    marcup = types.InlineKeyboardMarkup(row_width=1)
+    rass1 = types.InlineKeyboardButton(text='Получить сп. email', callback_data='rass_list')
+    rass2 = types.InlineKeyboardButton(text='Создать расс. в тг', callback_data='rass_new')
+    marcup.add(rass1, rass2)
+    bot.send_message(call.message.chat.id, text='Выберете действие', reply_markup=marcup)
+
+import pandas as pd
+def rass_list(call):
+    cunn, cursor = connect_db()
+    email_doc = cursor.execute("""SELECT email FROM doctors WHERE rassilka = 1""").fetchall()
+    print(email_doc)
+    email_pac = cursor.execute("""SELECT email FROM patients WHERE rassilka = 1""").fetchall()
+    data = []
+    data_pac = []
+    for i in email_doc:
+        data += i
+    for i in email_pac:
+        data_pac += i
+    data = [{item} for item in data]
+    data_pac = [{it} for it in data_pac]
+    print(data)
+    df = pd.DataFrame(data)
+    df.to_excel("media/email_doc.xlsx", index=False)
+    
+    with open('media/email_doc.xlsx', 'rb') as file:
+        bot.send_document(call.message.chat.id, file)
+    try:
+        df = pd.DataFrame(data_pac)
+        df.to_excel("media/email_pac.xlsx", index=False)
+        with open('media/email_pac.xlsx', 'rb') as file:
+            bot.send_document(call.message.chat.id, file)
+    except ValueError:
+        pass
+
+def rass_new(call):
+    bot.send_message(call.message.chat.id, text="Введите текст для рассылки")
+    bot.register_next_step_handler(call.message, rass_new1)
+def rass_new1(message):
+    conn, cursor = connect_db()
+    id_doc = cursor.execute("""SELECT user_id FROM doctors WHERE rassilka = 1""").fetchall()
+    id_pac = cursor.execute("""SELECT user_id FROM patients WHERE rassilka = 1""").fetchall()
+    ids = id_doc + id_pac
+    id_s = []
+    for i in ids:
+        id_s += i
+    print(id_s)
+    for _ in id_s:
+        bot.send_message(_, text=message.text)
+    bot.send_message(message.chat.id, text=f"Рассылка успешно отправлена.\n\nВсего отправленно сообщений {len(id_s)}")
+
 
 @bot.message_handler(content_types=['text', 'photo', 'video', 'audio'])
 def handle_message(message):
@@ -2025,10 +2169,12 @@ def callback_query(call):
     print('id', id_consult)
     print(call.from_user.id)
     bot.answer_callback_query(call.id)
-    if call.data == "doctor":
-        doc_reg(message=call.message, user_id=call.from_user.id)
-    elif call.data == "patient":
-        pat_reg(message=call.message, call=call)
+    if call.data.startswith("doctor_"):
+        reg_doc_sogl(call, fl=int(call.data.replace("doctor_","")))
+    elif call.data.startswith('dagree_'):
+        doc_reg(message=call.message, user_id=call.from_user.id, fl=int(call.data.replace("dagree_","")))
+    elif call.data.startswith("patient_"):
+        pat_reg(message=call.message, call=call, fl=int(call.data.replace("patient_","")))
     elif call.data == "doc_verification":
         print(1)
         doc_verification(message=call.message, call=call)
@@ -2318,9 +2464,38 @@ def callback_query(call):
             text="🩺 Выберите специализацию для консультации:",
             reply_markup=marcup
         )
-
-#
-
+    elif call.data == "rassilka_on":
+        fl = 0
+        polt_sogl(message=call.message, fl=fl)
+    elif call.data == "rassilka_off":
+        fl = 1
+        polt_sogl(message=call.message, fl=fl)
+    elif call.data.startswith('agree_'):
+        start1(message=call.message, fl=int(call.data.replace("agree_","")))
+    elif call.data == "disagree":
+        bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text = "❌ Вы отказались от условий. Использование сервиса невозможно.")
+    elif call.data == 'rassilka':
+        rassilka(call)
+    elif call.data == 'rass_list':
+        rass_list(call)
+    elif call.data == 'rass_new':
+        rass_new(call)
+    elif call.data == 'doc_off_rass':
+        cursor.execute("""UPDATE doctors SET rassilka = ? WHERE user_id = ?""", (0, call.from_user.id))
+        conn.commit()
+        profile_doc(call.message, call)
+    elif call.data == 'doc_on_rass':
+        cursor.execute("""UPDATE doctors SET rassilka = ? WHERE user_id = ?""", (1, call.from_user.id))
+        conn.commit()
+        profile_doc(call.message, call)
+    elif call.data == 'pat_off_rass':
+        cursor.execute("""UPDATE patients SET rassilka = ? WHERE user_id = ?""", (0, call.from_user.id))
+        conn.commit()
+        profile_doc(call.message, call)
+    elif call.data == 'pat_on_rass':
+        cursor.execute("""UPDATE patients SET rassilka = ? WHERE user_id = ?""", (1, call.from_user.id))
+        conn.commit()
+        profile_doc(call.message, call)
 
 
 bot.polling(none_stop=True)
